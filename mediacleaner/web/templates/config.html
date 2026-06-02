@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Configuration — MediaCleaner{% endblock %}
+{% block content %}
+<h1>Configuration</h1>
+
+{% if success %}<p style="color:#4caf50;">{{ success }}</p>{% endif %}
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<div class="card">
+<form method="post">
+  <label for="config_yaml">config.yaml</label>
+  <textarea name="config_yaml" id="config_yaml" rows="30" style="width:100%;font-family:monospace;font-size:0.85rem;background:#222;color:#eee;border:1px solid #444;padding:0.5rem;border-radius:4px;">{{ config_yaml }}</textarea>
+  <br><br>
+  <button type="submit" class="btn btn-primary">Save Configuration</button>
+  <small style="color:#aaa;margin-left:1rem;">Some changes (port, SSL) require a service restart.</small>
+</form>
+</div>
+
+<div class="card" style="margin-top:2rem;">
+<h2>Change Admin Password</h2>
+<form method="post" action="{{ url_for('config_password') }}">
+  <label for="new_password">New Password</label>
+  <input type="password" name="new_password" id="new_password" required minlength="4">
+  <br><br>
+  <button type="submit" class="btn btn-primary">Update Password</button>
+</form>
+</div>
+{% endblock %}

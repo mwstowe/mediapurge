@@ -1,4 +1,5 @@
 import functools
+import os
 
 import bcrypt
 from flask import Flask, redirect, render_template, request, session, url_for
@@ -202,6 +203,48 @@ def create_app() -> Flask:
                      "year": getattr(item, "year", "")}
         return render_template("browse.html", libraries=None, items=None,
                                library=library, item=item_data, children=children)
+
+    @app.route("/config", methods=["GET", "POST"])
+    @login_required
+    def config_edit():
+        import yaml
+        from mediacleaner.config import get_config, load_config
+        config_path = os.environ.get("MEDIACLEANER_CONFIG", "config.yaml")
+        if request.method == "POST":
+            try:
+                new_cfg = yaml.safe_load(request.form["config_yaml"])
+                if not isinstance(new_cfg, dict):
+                    raise ValueError("Config must be a YAML mapping")
+                with open(config_path, "w") as f:
+                    yaml.dump(new_cfg, f, default_flow_style=False, sort_keys=False)
+                # Reload config in memory
+                load_config(config_path)
+                return render_template("config.html", config_yaml=request.form["config_yaml"],
+                                       success="Configuration saved. Restart service for some changes to take effect.")
+            except Exception as e:
+                return render_template("config.html", config_yaml=request.form["config_yaml"],
+                                       error=f"Invalid config: {e}")
+        with open(config_path) as f:
+            config_yaml = f.read()
+        return render_template("config.html", config_yaml=config_yaml)
+
+    @app.route("/config/password", methods=["POST"])
+    @login_required
+    def config_password():
+        """Change admin password."""
+        import yaml
+        config_path = os.environ.get("MEDIACLEANER_CONFIG", "config.yaml")
+        new_pass = request.form.get("new_password", "")
+        if len(new_pass) < 4:
+            return redirect(url_for("config_edit"))
+        hashed = bcrypt.hashpw(new_pass.encode(), bcrypt.gensalt()).decode()
+        with open(config_path) as f:
+            raw = yaml.safe_load(f)
+        raw["web"]["admin_password"] = hashed
+        with open(config_path, "w") as f:
+            yaml.dump(raw, f, default_flow_style=False, sort_keys=False)
+        cfg["web"]["admin_password"] = hashed
+        return redirect(url_for("config_edit"))
 
     @app.route("/confirm/keep/<token>")
     def confirm_keep(token):
