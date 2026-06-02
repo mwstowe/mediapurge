@@ -18,9 +18,10 @@
 <h2>{{ library }}</h2>
 <p><a href="{{ url_for('browse') }}">← Back to libraries</a></p>
 <table>
-  <tr><th>Title</th><th>Year</th><th>Type</th><th></th></tr>
+  <tr><th></th><th>Title</th><th>Year</th><th>Type</th><th></th></tr>
   {% for item in items %}
   <tr>
+    <td><img src="{{ url_for('plex_thumb', path=item.thumb) }}" style="height:40px;border-radius:4px;" alt="" loading="lazy"></td>
     <td>
       {% if item.type == "show" %}
         <a href="{{ url_for('browse_item', library=library, rating_key=item.rating_key) }}">{{ item.title }}</a>
@@ -43,18 +44,24 @@
 {% endif %}
 
 {% if item %}
-<h2>{{ item.title }} ({{ item.year }})</h2>
-<p>
-  <a href="{{ url_for('browse_library', library=library) }}">← Back to {{ library }}</a>
-  | Rating Key: <code>{{ item.rating_key }}</code>
-  | <a href="{{ url_for('rules_new') }}?scope=show&plex_rating_key={{ item.rating_key }}&media_title={{ item.title }}" class="btn btn-sm btn-primary">+ Show Rule</a>
-</p>
+<div style="display:flex;align-items:center;gap:1rem;">
+  <img src="{{ url_for('plex_thumb', path=item.thumb) }}" style="height:80px;border-radius:6px;" alt="">
+  <div>
+    <h2 style="margin:0;">{{ item.title }} ({{ item.year }})</h2>
+    <p style="margin:0.3rem 0;">
+      <a href="{{ url_for('browse_library', library=library) }}">← Back to {{ library }}</a>
+      | Rating Key: <code>{{ item.rating_key }}</code>
+      | <a href="{{ url_for('rules_new') }}?scope=show&plex_rating_key={{ item.rating_key }}&media_title={{ item.title }}" class="btn btn-sm btn-primary">+ Show Rule</a>
+    </p>
+  </div>
+</div>
 
 {% if children %}
-<table>
-  <tr><th>Episode</th><th>Watched</th></tr>
+<table style="margin-top:1rem;">
+  <tr><th></th><th>Episode</th><th>Watched</th></tr>
   {% for ep in children %}
   <tr>
+    <td><img src="{{ url_for('plex_thumb', path=ep.thumb) }}" style="height:30px;border-radius:3px;" alt="" loading="lazy"></td>
     <td>{{ ep.title }}</td>
     <td>{{ "✓" if ep.watched else "✗" }}</td>
   </tr>

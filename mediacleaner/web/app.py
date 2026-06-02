@@ -179,7 +179,8 @@ def create_app() -> Flask:
         from mediacleaner.clients import plex as plex_client
         items = plex_client.get_library_items(library)
         items_data = [{"title": i.title, "rating_key": i.ratingKey, "type": i.type,
-                       "year": getattr(i, "year", "")} for i in items]
+                       "year": getattr(i, "year", ""),
+                       "thumb": i.thumb} for i in items]
         return render_template("browse.html", libraries=None, items=items_data,
                                library=library, item=None, children=None)
 
@@ -198,11 +199,25 @@ def create_app() -> Flask:
                         "title": f"S{ep.parentIndex:02d}E{ep.index:02d} - {ep.title}",
                         "rating_key": ep.ratingKey,
                         "watched": ep.isWatched,
+                        "thumb": ep.thumb,
                     })
         item_data = {"title": item.title, "rating_key": item.ratingKey, "type": item.type,
-                     "year": getattr(item, "year", "")}
+                     "year": getattr(item, "year", ""), "thumb": item.thumb}
         return render_template("browse.html", libraries=None, items=None,
                                library=library, item=item_data, children=children)
+
+    @app.route("/plex_thumb")
+    @login_required
+    def plex_thumb():
+        """Proxy Plex thumbnails to avoid exposing the token to the browser."""
+        import requests as req
+        thumb_path = request.args.get("path", "")
+        if not thumb_path:
+            return "", 404
+        cfg_plex = get_config()["plex"]
+        url = f"{cfg_plex['url']}{thumb_path}?X-Plex-Token={cfg_plex['token']}"
+        r = req.get(url)
+        return r.content, r.status_code, {"Content-Type": r.headers.get("Content-Type", "image/jpeg")}
 
     @app.route("/config", methods=["GET", "POST"])
     @login_required
