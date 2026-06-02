@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Confirmation — MediaCleaner{% endblock %}
+{% block content %}
+<div class="card" style="max-width:500px;margin:4rem auto;text-align:center;">
+{% if success %}
+  <h2>✓ Kept!</h2>
+  <p>The scheduled deletion has been cancelled. Your media is safe.</p>
+{% else %}
+  <h2>Link expired or invalid</h2>
+  <p>This confirmation link is no longer valid. The media may have already been deleted or the request was already processed.</p>
+{% endif %}
+</div>
+{% endblock %}

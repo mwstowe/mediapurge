@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit" if rule else "New" }} Rule — MediaCleaner{% endblock %}
+{% block content %}
+<h1>{{ "Edit" if rule else "New" }} Rule</h1>
+<div class="card">
+<form method="post">
+  <label for="scope">Scope</label>
+  <select name="scope" id="scope">
+    <option value="category" {{ "selected" if rule and rule.scope == "category" }}>Category</option>
+    <option value="show" {{ "selected" if rule and rule.scope == "show" }}>Show</option>
+    <option value="media" {{ "selected" if rule and rule.scope == "media" }}>Media</option>
+  </select>
+
+  <label for="plex_library">Plex Library (for category rules)</label>
+  <input name="plex_library" id="plex_library" value="{{ rule.plex_library or '' if rule else '' }}">
+
+  <label for="plex_rating_key">Plex Rating Key (for media rules)</label>
+  <input name="plex_rating_key" id="plex_rating_key" value="{{ rule.plex_rating_key or '' if rule else '' }}">
+
+  <label for="media_title">Media Title (display only)</label>
+  <input name="media_title" id="media_title" value="{{ rule.media_title or '' if rule else '' }}">
+
+  <label for="action">Action</label>
+  <select name="action" id="action">
+    <option value="keep" {{ "selected" if rule and rule.action == "keep" }}>Keep</option>
+    <option value="delete" {{ "selected" if rule and rule.action == "delete" }}>Delete</option>
+  </select>
+
+  <label for="min_days_watched">Min Days After Watched</label>
+  <input type="number" name="min_days_watched" id="min_days_watched" value="{{ rule.min_days_watched if rule else 7 }}">
+
+  <label for="max_days_age">Max Days Age (0 = no limit)</label>
+  <input type="number" name="max_days_age" id="max_days_age" value="{{ rule.max_days_age if rule else 0 }}">
+
+  <label for="max_days_inactive">Max Days Inactive — delete entire show if no views (0 = no limit)</label>
+  <input type="number" name="max_days_inactive" id="max_days_inactive" value="{{ rule.max_days_inactive if rule else 0 }}">
+
+  <label for="min_episodes">Min Episodes to Keep</label>
+  <input type="number" name="min_episodes" id="min_episodes" value="{{ rule.min_episodes if rule else 0 }}">
+
+  <label for="watched_by">Watched By (comma-separated usernames, or "any")</label>
+  <input name="watched_by" id="watched_by" value="{{ rule.watched_by if rule else 'any' }}">
+
+  <label><input type="checkbox" name="protect_on_deck" {{ "checked" if not rule or rule.protect_on_deck }}> Protect On Deck</label>
+  <label><input type="checkbox" name="all_watched" {{ "checked" if rule and rule.all_watched }}> Require ALL episodes watched (shows)</label>
+  <label><input type="checkbox" name="confirm_before_delete" {{ "checked" if rule and rule.confirm_before_delete }}> Confirm before deletion</label>
+
+  <label for="confirm_days">Confirmation wait period (days)</label>
+  <input type="number" name="confirm_days" id="confirm_days" value="{{ rule.confirm_days if rule else 7 }}">
+
+  <label for="confirm_method">Confirmation method</label>
+  <select name="confirm_method" id="confirm_method">
+    <option value="url_click" {{ "selected" if rule and rule.confirm_method == "url_click" }}>Email with keep link</option>
+    <option value="start_watching" {{ "selected" if rule and rule.confirm_method == "start_watching" }}>Start watching any episode to keep</option>
+    <option value="mark_unwatched" {{ "selected" if rule and rule.confirm_method == "mark_unwatched" }}>Mark as unwatched to keep</option>
+  </select>
+
+  <label for="confirm_email">Confirmation email recipient (optional override)</label>
+  <input type="email" name="confirm_email" id="confirm_email" value="{{ rule.confirm_email or '' if rule else '' }}">
+
+  <label><input type="checkbox" name="enabled" {{ "checked" if not rule or rule.enabled }}> Enabled</label>
+
+  <br><br>
+  <button type="submit" class="btn btn-primary">Save</button>
+  <a href="{{ url_for('rules_list') }}">Cancel</a>
+</form>
+</div>
+{% endblock %}

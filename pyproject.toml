@@ -1,0 +1,26 @@
+[project]
+name = "mediacleaner"
+version = "0.1.0"
+description = "Media lifecycle management with rule engine, daily maintenance, and web UI"
+requires-python = ">=3.11"
+dependencies = [
+    "flask==3.1.1",
+    "sqlalchemy==2.0.50",
+    "plexapi==4.15.16",
+    "requests==2.32.3",
+    "pyyaml==6.0.2",
+    "bcrypt==4.2.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==8.3.4",
+    "ruff==0.8.6",
+]
+
+[project.scripts]
+mediacleaner-web = "mediacleaner.web.app:main"
+mediacleaner-maintenance = "mediacleaner.maintenance:main"
+
+[tool.ruff]
+line-length = 100

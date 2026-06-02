@@ -1,0 +1,43 @@
+plex:
+  url: http://127.0.0.1:32400
+  token: "YOUR_PLEX_TOKEN"
+
+sonarr:
+  url: http://127.0.0.1:8989
+  api_key: "YOUR_SONARR_KEY"
+
+radarr:
+  url: http://127.0.0.1:7878
+  api_key: "YOUR_RADARR_KEY"
+
+medusa:
+  url: http://127.0.0.1:8081
+  api_key: "YOUR_MEDUSA_KEY"
+
+ombi:
+  url: http://127.0.0.1:5000
+  api_key: "YOUR_OMBI_KEY"
+
+web:
+  secret_key: "CHANGE_ME_RANDOM_SECRET"
+  admin_password: ""  # bcrypt hash; generate with: python -c "import bcrypt; print(bcrypt.hashpw(b'yourpass', bcrypt.gensalt()).decode())"
+  port: 9393
+
+notifications:
+  enabled: false
+  method: email  # email | discord
+  email:
+    smtp_host: smtp.example.com
+    smtp_port: 587
+    smtp_user: ""
+    smtp_pass: ""
+    recipient: ""
+  discord:
+    webhook_url: ""
+
+maintenance:
+  dry_run: true
+  log_file: /var/log/mediacleaner.log
+
+database:
+  path: mediacleaner.db

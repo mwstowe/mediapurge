@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Orphans — MediaCleaner{% endblock %}
+{% block content %}
+<h1>Orphaned Media</h1>
+<p>These items exist in Plex but are not managed by Sonarr, Radarr, or Medusa.</p>
+
+{% if orphans %}
+<table>
+  <tr><th>Title</th><th>Library</th><th>File Path</th></tr>
+  {% for item in orphans %}
+  <tr>
+    <td>{{ item.title }}</td>
+    <td>{{ item.plex_library or "—" }}</td>
+    <td>{{ item.file_path or "—" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>No orphans detected. Run a preview or maintenance job to scan.</p>
+{% endif %}
+{% endblock %}

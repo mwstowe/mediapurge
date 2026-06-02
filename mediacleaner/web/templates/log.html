@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Action Log — MediaCleaner{% endblock %}
+{% block content %}
+<h1>Action Log</h1>
+
+{% if logs %}
+<table>
+  <tr><th>Time</th><th>Title</th><th>Action</th><th>Dry Run</th><th>Details</th></tr>
+  {% for log in logs %}
+  <tr>
+    <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+    <td>{{ log.media_title }}</td>
+    <td><span class="tag-{{ log.action_taken }}">{{ log.action_taken }}</span></td>
+    <td>{{ "Yes" if log.dry_run else "No" }}</td>
+    <td>{{ log.details or "" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>No actions recorded.</p>
+{% endif %}
+{% endblock %}

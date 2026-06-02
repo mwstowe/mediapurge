@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — MediaCleaner{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+<div class="stats">
+  <div class="stat"><div class="num">{{ rule_count }}</div>Rules</div>
+  <div class="stat"><div class="num">{{ orphan_count }}</div>Orphans</div>
+</div>
+
+<h2 style="margin-top:2rem;">Recent Actions</h2>
+{% if recent %}
+<table>
+  <tr><th>Time</th><th>Title</th><th>Action</th><th>Dry Run</th></tr>
+  {% for log in recent %}
+  <tr>
+    <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+    <td>{{ log.media_title }}</td>
+    <td>
+      <span class="tag-{{ log.action_taken }}">{{ log.action_taken }}</span>
+    </td>
+    <td>{{ "Yes" if log.dry_run else "No" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>No actions recorded yet.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}MediaCleaner{% endblock %}</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; line-height: 1.6; }
+a { color: #4fc3f7; text-decoration: none; }
+a:hover { text-decoration: underline; }
+nav { background: #16213e; padding: 1rem 2rem; display: flex; gap: 2rem; align-items: center; }
+nav .brand { font-weight: bold; font-size: 1.2rem; color: #fff; }
+nav a { color: #aaa; } nav a:hover { color: #fff; }
+.container { max-width: 1000px; margin: 2rem auto; padding: 0 1rem; }
+table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+th, td { padding: 0.5rem; text-align: left; border-bottom: 1px solid #333; }
+th { background: #16213e; }
+.btn { display: inline-block; padding: 0.4rem 1rem; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9rem; color: #fff; }
+.btn-primary { background: #0f3460; } .btn-primary:hover { background: #1a5276; }
+.btn-danger { background: #922; } .btn-danger:hover { background: #b33; }
+.btn-sm { padding: 0.2rem 0.6rem; font-size: 0.8rem; }
+form label { display: block; margin: 0.5rem 0 0.2rem; font-weight: 500; }
+form input, form select { padding: 0.4rem; background: #222; border: 1px solid #444; color: #eee; border-radius: 4px; width: 100%; max-width: 400px; }
+form input[type="checkbox"] { width: auto; }
+.card { background: #16213e; border-radius: 8px; padding: 1.5rem; margin: 1rem 0; }
+.stats { display: flex; gap: 1rem; flex-wrap: wrap; }
+.stat { background: #0f3460; padding: 1rem 1.5rem; border-radius: 8px; text-align: center; }
+.stat .num { font-size: 2rem; font-weight: bold; }
+.error { color: #f44; }
+.tag-keep { color: #4caf50; } .tag-delete { color: #f44; } .tag-orphan { color: #ff9800; }
+</style>
+</head>
+<body>
+{% if session.get('authed') %}
+<nav>
+  <span class="brand">MediaCleaner</span>
+  <a href="{{ url_for('dashboard') }}">Dashboard</a>
+  <a href="{{ url_for('rules_list') }}">Rules</a>
+  <a href="{{ url_for('orphans') }}">Orphans</a>
+  <a href="{{ url_for('action_log') }}">Log</a>
+  <a href="{{ url_for('preview') }}">Preview</a>
+  <a href="{{ url_for('logout') }}">Logout</a>
+</nav>
+{% endif %}
+<div class="container">
+{% block content %}{% endblock %}
+</div>
+</body>
+</html>

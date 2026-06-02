@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Rules — MediaCleaner{% endblock %}
+{% block content %}
+<h1>Rules</h1>
+<a href="{{ url_for('rules_new') }}" class="btn btn-primary">+ New Rule</a>
+
+<table>
+  <tr><th>Scope</th><th>Target</th><th>Action</th><th>Watched By</th><th>Min Days</th><th>Episodes</th><th>Enabled</th><th></th></tr>
+  {% for rule in rules %}
+  <tr>
+    <td>{{ rule.scope }}</td>
+    <td>{{ rule.media_title or rule.plex_library or "—" }}</td>
+    <td><span class="tag-{{ rule.action }}">{{ rule.action }}</span></td>
+    <td>{{ rule.watched_by }}</td>
+    <td>{{ rule.min_days_watched }}</td>
+    <td>{{ rule.min_episodes }}</td>
+    <td>{{ "✓" if rule.enabled else "✗" }}</td>
+    <td>
+      <a href="{{ url_for('rules_edit', rule_id=rule.id) }}" class="btn btn-primary btn-sm">Edit</a>
+      <form method="post" action="{{ url_for('rules_delete', rule_id=rule.id) }}" style="display:inline;">
+        <button class="btn btn-danger btn-sm" onclick="return confirm('Delete this rule?')">Del</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endblock %}

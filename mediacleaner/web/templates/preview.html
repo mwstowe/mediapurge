@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Preview — MediaCleaner{% endblock %}
+{% block content %}
+<h1>Dry Run Preview</h1>
+<p>This shows what would happen if maintenance ran right now.</p>
+
+{% if error %}
+<div class="card"><p class="error">{{ error }}</p></div>
+{% elif report %}
+
+{% set deletions = report.results | selectattr("action", "equalto", "delete") | list %}
+{% if deletions %}
+<h2>Would Delete ({{ deletions | length }})</h2>
+<table>
+  <tr><th>Title</th><th>Manager</th><th>Reason</th></tr>
+  {% for r in deletions %}
+  <tr>
+    <td>{{ r.title }}</td>
+    <td>{{ r.manager }}</td>
+    <td>{{ r.reason }}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% else %}
+<p>No deletions would occur.</p>
+{% endif %}
+
+{% if report.orphans %}
+<h2>Orphans ({{ report.orphans | length }})</h2>
+<table>
+  <tr><th>Title</th><th>Reason</th></tr>
+  {% for r in report.orphans %}
+  <tr><td>{{ r.title }}</td><td>{{ r.reason }}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{% if report.errors %}
+<h2 class="error">Errors</h2>
+<ul>{% for e in report.errors %}<li>{{ e }}</li>{% endfor %}</ul>
+{% endif %}
+
+{% endif %}
+{% endblock %}
