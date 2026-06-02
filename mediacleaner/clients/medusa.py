@@ -14,7 +14,7 @@ def _get(url, headers):
 
 def get_all_shows() -> list[dict]:
     url, headers = _base()
-    r = _get(f"{url}/api/v2/series", headers)
+    r = _get(f"{url}/api/v2/series?limit=1000", headers)
     r.raise_for_status()
     return r.json()
 
