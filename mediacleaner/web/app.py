@@ -177,7 +177,12 @@ def create_app() -> Flask:
 def main():
     app = create_app()
     cfg = get_config()
-    app.run(host="0.0.0.0", port=cfg["web"].get("port", 9393))
+    ssl_ctx = None
+    cert = cfg["web"].get("ssl_cert")
+    key = cfg["web"].get("ssl_key")
+    if cert and key:
+        ssl_ctx = (cert, key)
+    app.run(host="0.0.0.0", port=cfg["web"].get("port", 9393), ssl_context=ssl_ctx)
 
 
 if __name__ == "__main__":
