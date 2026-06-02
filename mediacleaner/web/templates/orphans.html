@@ -6,16 +6,15 @@
 
 {% if orphans %}
 <table>
-  <tr><th>Title</th><th>Library</th><th>File Path</th></tr>
+  <tr><th>Title</th><th>Details</th></tr>
   {% for item in orphans %}
   <tr>
     <td>{{ item.title }}</td>
-    <td>{{ item.plex_library or "—" }}</td>
-    <td>{{ item.file_path or "—" }}</td>
+    <td>{{ item.reason }}</td>
   </tr>
   {% endfor %}
 </table>
 {% else %}
-<p>No orphans detected. Run a preview or maintenance job to scan.</p>
+<p>No orphans detected.</p>
 {% endif %}
 {% endblock %}

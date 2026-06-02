@@ -9,6 +9,9 @@
 {% elif report %}
 
 {% set deletions = report.results | selectattr("action", "equalto", "delete") | list %}
+{% set keeps = report.results | selectattr("action", "equalto", "keep") | list %}
+{% set pending = report.results | selectattr("action", "equalto", "pending_confirm") | list %}
+
 {% if deletions %}
 <h2>Would Delete ({{ deletions | length }})</h2>
 <table>
@@ -25,11 +28,21 @@
 <p>No deletions would occur.</p>
 {% endif %}
 
-{% if report.orphans %}
-<h2>Orphans ({{ report.orphans | length }})</h2>
+{% if pending %}
+<h2>Pending Confirmation ({{ pending | length }})</h2>
 <table>
   <tr><th>Title</th><th>Reason</th></tr>
-  {% for r in report.orphans %}
+  {% for r in pending %}
+  <tr><td>{{ r.title }}</td><td>{{ r.reason }}</td></tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{% if keeps %}
+<h2>Matched — Keeping ({{ keeps | length }})</h2>
+<table>
+  <tr><th>Title</th><th>Reason</th></tr>
+  {% for r in keeps %}
   <tr><td>{{ r.title }}</td><td>{{ r.reason }}</td></tr>
   {% endfor %}
 </table>

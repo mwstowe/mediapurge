@@ -6,7 +6,7 @@ import sys
 
 from mediacleaner.config import load_config, get_config
 from mediacleaner.db import init_db
-from mediacleaner.engine import EngineReport, execute_deletions, run_evaluation, sync_managed_media, process_pending_actions, get_confirmed_deletions
+from mediacleaner.engine import EngineReport, execute_deletions, run_evaluation, sync_managed_media, process_pending_actions, get_confirmed_deletions, run_orphan_scan
 from mediacleaner import notify
 
 log = logging.getLogger("mediacleaner")
@@ -71,9 +71,14 @@ def main():
         log.error(f"Failed to sync managed media: {e}")
         sys.exit(1)
 
-    # Step 2+3: Evaluate rules (includes orphan detection)
+    # Step 2: Evaluate rules
     log.info("Evaluating rules...")
     report = run_evaluation(dry_run=dry_run)
+
+    # Step 3: Orphan scan (separate from rules)
+    log.info("Scanning for orphans...")
+    orphans = run_orphan_scan()
+    report.orphans = orphans
 
     # Step 4: Process pending confirmations (check for cancellation or expiry)
     log.info("Processing pending confirmations...")

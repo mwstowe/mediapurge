@@ -45,6 +45,8 @@ notifications:
 maintenance:
   dry_run: true
   log_file: /var/log/mediacleaner.log
+  excluded_libraries:
+    - "3D Movies"
 
 database:
   path: mediacleaner.db

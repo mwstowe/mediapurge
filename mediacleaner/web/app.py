@@ -160,12 +160,13 @@ def create_app() -> Flask:
     @app.route("/orphans")
     @login_required
     def orphans():
-        db = get_session()
-        items = db.execute(
-            select(ManagedMedia).where(ManagedMedia.manager == "none")
-        ).scalars().all()
-        db.close()
-        return render_template("orphans.html", orphans=items)
+        from mediacleaner.engine import run_orphan_scan
+        try:
+            sync_managed_media()
+            orphan_list = run_orphan_scan()
+        except Exception as e:
+            orphan_list = []
+        return render_template("orphans.html", orphans=orphan_list)
 
     @app.route("/log")
     @login_required

@@ -238,8 +238,11 @@ def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
 
 def run_evaluation(dry_run: bool = True) -> EngineReport:
     """Evaluate all Plex items against rules. Returns report of actions."""
+    from mediacleaner.config import get_config
     report = EngineReport()
     session = get_session()
+    cfg = get_config()
+    excluded = cfg.get("maintenance", {}).get("excluded_libraries", [])
 
     try:
         libraries = plex.get_libraries()
@@ -248,6 +251,9 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
         return report
 
     for lib_name in libraries:
+        if lib_name in excluded:
+            continue
+
         try:
             items = plex.get_library_items(lib_name)
         except Exception as e:
@@ -258,59 +264,51 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
             key = str(item.ratingKey)
             title = item.title
 
-            manager, manager_id = find_manager(item)
-
-            # Orphan detection
-            if manager == "none":
-                result = EvalResult(
-                    title=title, rating_key=key, action="orphan_detected",
-                    reason="not managed by any arr", manager="none",
-                )
-                report.orphans.append(result)
-                session.add(ActionLog(
-                    media_title=title, plex_rating_key=key,
-                    action_taken="orphan_detected", dry_run=dry_run,
-                    details=json.dumps({"library": lib_name}),
-                ))
-                continue
-
             rule = resolve_rule(item, lib_name)
             if rule is None:
-                continue  # default keep, nothing to log
+                continue  # no rule, default keep
+
+            manager, manager_id = find_manager(item)
 
             # Show-scoped rules evaluate per-episode
             if rule.scope == "show" and hasattr(item, "episodes"):
                 for ep, action, reason in evaluate_show_episodes(item, rule):
                     if action == "delete_show":
-                        # Nuke entire show due to inactivity
                         result = EvalResult(
                             title=title, rating_key=key, action="delete",
                             rule_id=rule.id, reason=reason,
                             manager=manager, manager_id=manager_id,
                         )
                         report.results.append(result)
-                        session.add(ActionLog(
-                            media_title=title, plex_rating_key=key,
-                            rule_id=rule.id, action_taken="delete", dry_run=dry_run,
-                            details=json.dumps({"reason": reason, "manager": manager, "scope": "whole_show"}),
-                        ))
+                        if action != "keep":
+                            session.add(ActionLog(
+                                media_title=title, plex_rating_key=key,
+                                rule_id=rule.id, action_taken="delete", dry_run=dry_run,
+                                details=json.dumps({"reason": reason, "manager": manager, "scope": "whole_show"}),
+                            ))
                         break
                     elif action == "pending_confirm":
                         _handle_pending_confirm(session, rule, key, title, dry_run)
+                        report.results.append(EvalResult(
+                            title=title, rating_key=key, action="pending_confirm",
+                            rule_id=rule.id, reason=reason, manager=manager, manager_id=manager_id,
+                        ))
                         break
-                    elif action == "delete":
-                        ep_title = f"{title} - S{ep.parentIndex:02d}E{ep.index:02d}"
+                    else:
+                        ep_title = f"{title} - S{ep.parentIndex:02d}E{ep.index:02d}" if action == "delete" else title
                         result = EvalResult(
-                            title=ep_title, rating_key=str(ep.ratingKey), action=action,
-                            rule_id=rule.id, reason=reason,
+                            title=ep_title if action == "delete" else title,
+                            rating_key=str(ep.ratingKey) if action == "delete" else key,
+                            action=action, rule_id=rule.id, reason=reason,
                             manager=manager, manager_id=manager_id,
                         )
                         report.results.append(result)
-                        session.add(ActionLog(
-                            media_title=ep_title, plex_rating_key=str(ep.ratingKey),
-                            rule_id=rule.id, action_taken="delete", dry_run=dry_run,
-                            details=json.dumps({"reason": reason, "manager": manager}),
-                        ))
+                        if action == "delete":
+                            session.add(ActionLog(
+                                media_title=ep_title, plex_rating_key=str(ep.ratingKey),
+                                rule_id=rule.id, action_taken="delete", dry_run=dry_run,
+                                details=json.dumps({"reason": reason, "manager": manager}),
+                            ))
                 continue
 
             action, reason = evaluate_item(item, rule)
@@ -331,6 +329,35 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
     session.commit()
     session.close()
     return report
+
+
+def run_orphan_scan() -> list[EvalResult]:
+    """Separate orphan detection scan. Returns list of orphaned items."""
+    from mediacleaner.config import get_config
+    cfg = get_config()
+    excluded = cfg.get("maintenance", {}).get("excluded_libraries", [])
+    orphans = []
+
+    try:
+        libraries = plex.get_libraries()
+    except Exception:
+        return orphans
+
+    for lib_name in libraries:
+        if lib_name in excluded:
+            continue
+        try:
+            items = plex.get_library_items(lib_name)
+        except Exception:
+            continue
+        for item in items:
+            manager, _ = find_manager(item)
+            if manager == "none":
+                orphans.append(EvalResult(
+                    title=item.title, rating_key=str(item.ratingKey),
+                    action="orphan_detected", reason=f"not managed (library: {lib_name})",
+                ))
+    return orphans
 
 
 def execute_deletions(report: EngineReport):
