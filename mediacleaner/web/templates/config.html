@@ -6,6 +6,23 @@
 {% if success %}<p style="color:#4caf50;">{{ success }}</p>{% endif %}
 {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
+{% if test_results %}
+<div class="card">
+<h2>Connection Test Results</h2>
+<table>
+  <tr><th>Service</th><th>Status</th><th>Detail</th></tr>
+  {% for name, r in test_results.items() %}
+  <tr>
+    <td>{{ name }}</td>
+    <td>{{ "✓ OK" if r.ok else "✗ FAILED" }}</td>
+    <td style="color:{{ '#4caf50' if r.ok else '#f44' }}">{{ r.detail }}</td>
+  </tr>
+  {% endfor %}
+</table>
+</div>
+{% endif %}
+
+{% if config_yaml is not none %}
 <div class="card">
 <form method="post">
   <label for="config_yaml">config.yaml</label>
@@ -15,6 +32,7 @@
   <small style="color:#aaa;margin-left:1rem;">Some changes (port, SSL) require a service restart.</small>
 </form>
 </div>
+{% endif %}
 
 <div class="card" style="margin-top:2rem;">
 <h2>Change Admin Password</h2>
@@ -30,8 +48,11 @@
 <h2>Test Notifications</h2>
 {% if request.args.get("msg") == "sent" %}<p style="color:#4caf50;">Test email sent successfully.</p>{% endif %}
 {% if request.args.get("msg") == "fail" %}<p class="error">Failed: {{ request.args.get("err", "unknown") }}</p>{% endif %}
-<form method="post" action="{{ url_for('config_test_email') }}">
+<form method="post" action="{{ url_for('config_test_email') }}" style="display:inline;">
   <button type="submit" class="btn btn-primary">Send Test Email</button>
+</form>
+<form method="post" action="{{ url_for('config_test_connections') }}" style="display:inline;margin-left:1rem;">
+  <button type="submit" class="btn btn-primary">Test All Connections</button>
 </form>
 </div>
 {% endblock %}

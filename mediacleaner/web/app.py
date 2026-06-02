@@ -256,6 +256,27 @@ def create_app() -> Flask:
         except Exception as e:
             return redirect(url_for("config_edit") + f"?msg=fail&err={e}")
 
+    @app.route("/config/test-connections", methods=["POST"])
+    @login_required
+    def config_test_connections():
+        from mediacleaner.clients import plex as plex_client, sonarr, radarr, medusa, ombi
+        import json
+        results = {}
+        tests = {
+            "plex": lambda: plex_client._server().friendlyName,
+            "sonarr": lambda: len(sonarr.get_all_series()),
+            "radarr": lambda: len(radarr.get_all_movies()),
+            "medusa": lambda: len(medusa.get_all_shows()),
+            "ombi": lambda: len(ombi.get_movie_requests()) + len(ombi.get_tv_requests()),
+        }
+        for name, fn in tests.items():
+            try:
+                result = fn()
+                results[name] = {"ok": True, "detail": str(result)}
+            except Exception as e:
+                results[name] = {"ok": False, "detail": str(e)}
+        return render_template("config.html", config_yaml=None, test_results=results)
+
     @app.route("/confirm/keep/<token>")
     def confirm_keep(token):
         """Public URL — no auth required. User clicks to cancel a pending deletion."""
