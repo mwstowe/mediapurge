@@ -33,7 +33,6 @@ notifications:
     smtp_port: 587
     smtp_user: ""
     smtp_pass: ""
-    recipient: ""
   discord:
     webhook_url: ""
 

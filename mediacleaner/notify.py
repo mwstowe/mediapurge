@@ -11,6 +11,15 @@ from mediacleaner.config import get_config
 log = logging.getLogger(__name__)
 
 
+def _default_recipient() -> str:
+    """Get admin email from Plex account."""
+    try:
+        from mediacleaner.clients.plex import _server
+        return _server().myPlexAccount().email
+    except Exception:
+        return ""
+
+
 def send(subject: str, body: str):
     cfg = get_config().get("notifications", {})
     if not cfg.get("enabled"):
@@ -18,7 +27,9 @@ def send(subject: str, body: str):
 
     method = cfg.get("method", "email")
     if method == "email":
-        _send_email(subject, body, cfg["email"])
+        recipient = _default_recipient()
+        if recipient:
+            _send_email(subject, body, cfg.get("email", {}), recipient)
     elif method == "discord":
         _send_discord(subject, body, cfg["discord"])
 
@@ -26,16 +37,14 @@ def send(subject: str, body: str):
 def send_to(subject: str, body: str, recipient: str):
     """Send to a specific email recipient (for confirmation emails)."""
     cfg = get_config().get("notifications", {})
-    email_cfg = dict(cfg.get("email", {}))
-    email_cfg["recipient"] = recipient
-    _send_email(subject, body, email_cfg)
+    _send_email(subject, body, cfg.get("email", {}), recipient)
 
 
-def _send_email(subject: str, body: str, cfg: dict):
+def _send_email(subject: str, body: str, cfg: dict, recipient: str):
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = cfg.get("smtp_user", "mediacleaner@localhost")
-    msg["To"] = cfg["recipient"]
+    msg["To"] = recipient
     msg.set_content(body)
 
     try:
