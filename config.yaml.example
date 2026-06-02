@@ -44,6 +44,7 @@ notifications:
 
 maintenance:
   dry_run: true
+  schedule: "03:00"
   log_file: /var/log/mediacleaner.log
   excluded_libraries:
     - "3D Movies"

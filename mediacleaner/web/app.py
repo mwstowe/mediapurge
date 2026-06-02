@@ -346,6 +346,9 @@ def create_app() -> Flask:
             return render_template("confirm.html", success=True)
         return render_template("confirm.html", success=False)
 
+    from mediacleaner.scheduler import start_scheduler
+    start_scheduler(app)
+
     return app
 
 
