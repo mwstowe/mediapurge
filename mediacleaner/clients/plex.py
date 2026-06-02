@@ -12,11 +12,14 @@ def _server() -> PlexServer:
 
 def get_users() -> list[dict]:
     """Return all Plex home/managed users with name and email."""
+    cfg = get_config()["plex"]
+    email_map = cfg.get("user_emails", {})
     server = _server()
     account = server.myPlexAccount()
-    users = [{"username": account.username, "email": account.email}]
+    users = [{"username": account.username, "email": email_map.get(account.username, account.email)}]
     for user in account.users():
-        users.append({"username": user.username or user.title, "email": user.email or ""})
+        name = user.username or user.title
+        users.append({"username": name, "email": email_map.get(name, user.email or "")})
     return users
 
 
