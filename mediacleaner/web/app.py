@@ -185,8 +185,21 @@ def create_app() -> Flask:
             sync_managed_media()
             report = run_evaluation(dry_run=True)
         except Exception as e:
-            return render_template("preview.html", report=None, error=str(e))
-        return render_template("preview.html", report=report, error=None)
+            return render_template("preview.html", report=None, error=str(e), ran=False)
+        return render_template("preview.html", report=report, error=None, ran=False)
+
+    @app.route("/run", methods=["POST"])
+    @login_required
+    def run_now():
+        from mediacleaner.engine import execute_deletions, process_pending_actions
+        try:
+            sync_managed_media()
+            report = run_evaluation(dry_run=False)
+            process_pending_actions()
+            execute_deletions(report)
+        except Exception as e:
+            return render_template("preview.html", report=None, error=str(e), ran=True)
+        return render_template("preview.html", report=report, error=None, ran=True)
 
     @app.route("/browse")
     @login_required

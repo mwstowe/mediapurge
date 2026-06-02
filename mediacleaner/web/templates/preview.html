@@ -1,8 +1,15 @@
 {% extends "base.html" %}
 {% block title %}Preview — MediaCleaner{% endblock %}
 {% block content %}
-<h1>Dry Run Preview</h1>
+<h1>{% if ran %}Maintenance Results{% else %}Dry Run Preview{% endif %}</h1>
+{% if ran %}
+<p style="color:#4caf50;font-weight:bold;">Maintenance executed. Actions below were performed.</p>
+{% else %}
 <p>This shows what would happen if maintenance ran right now.</p>
+<form method="post" action="{{ url_for('run_now') }}" style="margin-bottom:1rem;">
+  <button type="submit" class="btn btn-danger" onclick="return confirm('Run maintenance NOW? This will delete media per your rules.')">Run Now</button>
+</form>
+{% endif %}
 
 {% if error %}
 <div class="card"><p class="error">{{ error }}</p></div>
