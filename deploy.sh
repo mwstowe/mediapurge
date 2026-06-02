@@ -7,7 +7,7 @@ OWNER=sabnzbd:sabnzbd
 # Create destination if needed
 sudo mkdir -p "$DEST"
 
-# Sync code, excluding config/db/venv
+# Sync code, excluding config/db/venv/dev files
 sudo rsync -av --delete \
     --exclude config.yaml \
     --exclude '*.db' \
@@ -16,14 +16,6 @@ sudo rsync -av --delete \
     --exclude .git \
     --exclude '*.pyc' \
     /mirror/develop/mediacleaner/ "$DEST/"
-
-# Set up venv if missing
-if [ ! -d "$DEST/.venv" ]; then
-    sudo -u sabnzbd python3 -m venv "$DEST/.venv"
-fi
-
-# Install/update deps
-sudo -u sabnzbd "$DEST/.venv/bin/pip" install -e "$DEST" --quiet
 
 # Copy example config if no live config exists
 if [ ! -f "$DEST/config.yaml" ]; then
@@ -35,3 +27,13 @@ fi
 sudo chown -R "$OWNER" "$DEST"
 
 echo "Deployed to $DEST"
+echo ""
+echo "Required Gentoo packages:"
+echo "  dev-python/flask"
+echo "  dev-python/sqlalchemy"
+echo "  dev-python/pyyaml"
+echo "  dev-python/requests"
+echo "  dev-python/bcrypt"
+echo "  dev-python/plexapi"
+echo ""
+echo "Install with: sudo emerge -av flask sqlalchemy pyyaml requests bcrypt plexapi"
