@@ -81,6 +81,11 @@ def get_episode_count(show) -> int:
 
 def get_file_paths(item) -> list[str]:
     """Return file paths for a media item."""
+    # Shows/seasons use .locations
+    locations = getattr(item, "locations", None)
+    if locations:
+        return list(locations)
+    # Movies/episodes use .media.parts
     paths = []
     for media in getattr(item, "media", []):
         for part in media.parts:
