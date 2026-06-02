@@ -38,16 +38,6 @@
 </table>
 {% endif %}
 
-{% if keeps %}
-<h2>Matched — Keeping ({{ keeps | length }})</h2>
-<table>
-  <tr><th>Title</th><th>Reason</th></tr>
-  {% for r in keeps %}
-  <tr><td>{{ r.title }}</td><td>{{ r.reason }}</td></tr>
-  {% endfor %}
-</table>
-{% endif %}
-
 {% if report.errors %}
 <h2 class="error">Errors</h2>
 <ul>{% for e in report.errors %}<li>{{ e }}</li>{% endfor %}</ul>
