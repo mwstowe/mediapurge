@@ -1,6 +1,16 @@
 {% extends "base.html" %}
 {% block title %}{{ "Edit" if rule else "New" }} Rule — MediaCleaner{% endblock %}
 {% block content %}
+{% if breadcrumb %}
+<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;padding:0.75rem;background:#16213e;border-radius:8px;">
+  <img src="{{ url_for('plex_thumb', path=breadcrumb.thumb) }}" style="height:60px;border-radius:6px;" alt="">
+  <div>
+    <strong style="font-size:1.1rem;">{{ breadcrumb.title }}</strong>
+    {% if breadcrumb.year %}<span style="color:#aaa;"> ({{ breadcrumb.year }})</span>{% endif %}
+    <br><span style="color:#aaa;font-size:0.85rem;">{{ request.args.get("scope", "") | title }} Rule</span>
+  </div>
+</div>
+{% endif %}
 <h1>{{ "Edit" if rule else "New" }} Rule</h1>
 <div class="card">
 <form method="post">

@@ -92,7 +92,19 @@ def create_app() -> Flask:
             db.commit()
             db.close()
             return redirect(url_for("rules_list"))
-        return render_template("rule_form.html", rule=None)
+        # Build breadcrumb if coming from browse
+        breadcrumb = None
+        rating_key = request.args.get("plex_rating_key")
+        if rating_key:
+            try:
+                from mediacleaner.clients import plex as plex_client
+                server = plex_client._server()
+                item = server.fetchItem(int(rating_key))
+                breadcrumb = {"title": item.title, "thumb": item.thumb,
+                              "year": getattr(item, "year", "")}
+            except Exception:
+                pass
+        return render_template("rule_form.html", rule=None, breadcrumb=breadcrumb)
 
     @app.route("/rules/<int:rule_id>/edit", methods=["GET", "POST"])
     @login_required
