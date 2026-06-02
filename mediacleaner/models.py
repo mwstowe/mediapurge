@@ -27,7 +27,7 @@ class Rule(Base):
     protect_on_deck: Mapped[bool] = mapped_column(Boolean, default=True)
     all_watched: Mapped[bool] = mapped_column(Boolean, default=False)
     # Confirmation settings
-    confirm_before_delete: Mapped[bool] = mapped_column(Boolean, default=False)
+    confirm_before_delete: Mapped[bool] = mapped_column(Boolean, default=True)
     confirm_days: Mapped[int] = mapped_column(Integer, default=7)
     confirm_method: Mapped[str | None] = mapped_column(
         Enum("url_click", "start_watching", "mark_unwatched", name="confirm_method"), nullable=True

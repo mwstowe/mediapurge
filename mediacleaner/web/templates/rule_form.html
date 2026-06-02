@@ -65,7 +65,7 @@
 
   <label><input type="checkbox" name="protect_on_deck" {{ "checked" if not rule or rule.protect_on_deck }}> Protect On Deck</label>
   <label><input type="checkbox" name="all_watched" {{ "checked" if rule and rule.all_watched }}> Require ALL episodes watched (shows)</label>
-  <label><input type="checkbox" name="confirm_before_delete" {{ "checked" if rule and rule.confirm_before_delete }}> Confirm before deletion</label>
+  <label><input type="checkbox" name="confirm_before_delete" {{ "checked" if not rule or rule.confirm_before_delete }}> Confirm before deletion</label>
 
   <label for="confirm_days">Confirmation wait period (days)</label>
   <input type="number" name="confirm_days" id="confirm_days" value="{{ rule.confirm_days if rule else 7 }}">
