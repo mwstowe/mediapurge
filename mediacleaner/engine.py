@@ -362,13 +362,14 @@ def run_orphan_scan() -> list[EvalResult]:
 
 def execute_deletions(report: EngineReport):
     """Actually perform deletions for items marked 'delete' in the report."""
+    rules_to_delete = set()
+
     for result in report.results:
         if result.action != "delete":
             continue
 
         try:
             if result.manager == "sonarr":
-                # Check if this is an episode (show-scoped rule) vs whole series
                 _delete_via_sonarr(result)
             elif result.manager == "radarr":
                 radarr.delete_movie(result.manager_id, delete_files=True)
@@ -378,9 +379,25 @@ def execute_deletions(report: EngineReport):
                 ombi.cleanup_for_title(result.title)
 
             log.info(f"Deleted: {result.title} via {result.manager}")
+
+            # If this was a whole-show/movie deletion (not episode-level), retire the rule
+            if result.rule_id and " - S" not in result.title:
+                rules_to_delete.add(result.rule_id)
+
         except Exception as e:
             log.error(f"Failed to delete {result.title}: {e}")
             report.errors.append(f"Delete failed for {result.title}: {e}")
+
+    # Clean up rules that are no longer needed
+    if rules_to_delete:
+        session = get_session()
+        for rule_id in rules_to_delete:
+            rule = session.get(Rule, rule_id)
+            if rule:
+                log.info(f"Retiring rule #{rule.id} ({rule.media_title}) — media deleted")
+                session.delete(rule)
+        session.commit()
+        session.close()
 
 
 def _delete_via_sonarr(result: EvalResult):
