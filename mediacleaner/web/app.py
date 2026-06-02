@@ -163,6 +163,46 @@ def create_app() -> Flask:
             return render_template("preview.html", report=None, error=str(e))
         return render_template("preview.html", report=report, error=None)
 
+    @app.route("/browse")
+    @login_required
+    def browse():
+        """List Plex libraries."""
+        from mediacleaner.clients import plex as plex_client
+        libraries = plex_client.get_libraries()
+        return render_template("browse.html", libraries=libraries, items=None, item=None, children=None)
+
+    @app.route("/browse/<library>")
+    @login_required
+    def browse_library(library):
+        """List items in a library."""
+        from mediacleaner.clients import plex as plex_client
+        items = plex_client.get_library_items(library)
+        items_data = [{"title": i.title, "rating_key": i.ratingKey, "type": i.type,
+                       "year": getattr(i, "year", "")} for i in items]
+        return render_template("browse.html", libraries=None, items=items_data,
+                               library=library, item=None, children=None)
+
+    @app.route("/browse/<library>/<int:rating_key>")
+    @login_required
+    def browse_item(library, rating_key):
+        """Show detail for a specific item (show seasons/episodes)."""
+        from mediacleaner.clients import plex as plex_client
+        server = plex_client._server()
+        item = server.fetchItem(rating_key)
+        children = []
+        if item.type == "show":
+            for season in item.seasons():
+                for ep in season.episodes():
+                    children.append({
+                        "title": f"S{ep.parentIndex:02d}E{ep.index:02d} - {ep.title}",
+                        "rating_key": ep.ratingKey,
+                        "watched": ep.isWatched,
+                    })
+        item_data = {"title": item.title, "rating_key": item.ratingKey, "type": item.type,
+                     "year": getattr(item, "year", "")}
+        return render_template("browse.html", libraries=None, items=None,
+                               library=library, item=item_data, children=children)
+
     @app.route("/confirm/keep/<token>")
     def confirm_keep(token):
         """Public URL — no auth required. User clicks to cancel a pending deletion."""
