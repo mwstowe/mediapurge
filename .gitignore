@@ -7,3 +7,5 @@ build/
 *.db
 config.yaml
 .ruff_cache/
+deploy.sh
+context.json
