@@ -181,6 +181,8 @@ def create_app() -> Flask:
     @app.route("/preview")
     @login_required
     def preview():
+        if request.args.get("mode") != "preview":
+            return render_template("preview.html", report=None, error=None, ran=False)
         try:
             sync_managed_media()
             report = run_evaluation(dry_run=True)

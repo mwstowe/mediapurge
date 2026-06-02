@@ -1,26 +1,44 @@
 {% extends "base.html" %}
-{% block title %}Preview — MediaCleaner{% endblock %}
+{% block title %}Maintenance — MediaCleaner{% endblock %}
 {% block content %}
-<h1>{% if ran %}Maintenance Results{% else %}Dry Run Preview{% endif %}</h1>
+<h1>Maintenance</h1>
+
+{% if not report and not error %}
+<p>Run a dry-run preview to see what would happen, or execute maintenance immediately.</p>
+<form method="get" style="display:inline;">
+  <button type="submit" class="btn btn-primary">Preview (Dry Run)</button>
+  <input type="hidden" name="mode" value="preview">
+</form>
+<form method="post" action="{{ url_for('run_now') }}" style="display:inline;margin-left:1rem;">
+  <button type="submit" class="btn btn-danger" onclick="return confirm('Run maintenance NOW? This will delete media per your rules.')">Run Now (Live)</button>
+</form>
+
+{% elif error %}
+<div class="card"><p class="error">{{ error }}</p></div>
+
+{% elif report %}
+
 {% if ran %}
-<p style="color:#4caf50;font-weight:bold;">Maintenance executed. Actions below were performed.</p>
+<p style="color:#4caf50;font-weight:bold;">✓ Maintenance executed. Actions below were performed.</p>
 {% else %}
-<p>This shows what would happen if maintenance ran right now.</p>
-<form method="post" action="{{ url_for('run_now') }}" style="margin-bottom:1rem;">
-  <button type="submit" class="btn btn-danger" onclick="return confirm('Run maintenance NOW? This will delete media per your rules.')">Run Now</button>
+<p>Preview — no changes made.</p>
+{% endif %}
+
+<form method="get" style="display:inline;">
+  <button type="submit" class="btn btn-primary">Preview (Dry Run)</button>
+  <input type="hidden" name="mode" value="preview">
+</form>
+{% if not ran %}
+<form method="post" action="{{ url_for('run_now') }}" style="display:inline;margin-left:1rem;">
+  <button type="submit" class="btn btn-danger" onclick="return confirm('Run maintenance NOW? This will delete media per your rules.')">Run Now (Live)</button>
 </form>
 {% endif %}
 
-{% if error %}
-<div class="card"><p class="error">{{ error }}</p></div>
-{% elif report %}
-
 {% set deletions = report.results | selectattr("action", "equalto", "delete") | list %}
-{% set keeps = report.results | selectattr("action", "equalto", "keep") | list %}
 {% set pending = report.results | selectattr("action", "equalto", "pending_confirm") | list %}
 
 {% if deletions %}
-<h2>Would Delete ({{ deletions | length }})</h2>
+<h2 style="margin-top:1.5rem;">{{ "Deleted" if ran else "Would Delete" }} ({{ deletions | length }})</h2>
 <table>
   <tr><th>Title</th><th>Manager</th><th>Reason</th></tr>
   {% for r in deletions %}
@@ -32,7 +50,7 @@
   {% endfor %}
 </table>
 {% else %}
-<p>No deletions would occur.</p>
+<p style="margin-top:1.5rem;">No deletions.</p>
 {% endif %}
 
 {% if pending %}
