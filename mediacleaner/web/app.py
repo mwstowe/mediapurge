@@ -246,6 +246,16 @@ def create_app() -> Flask:
         cfg["web"]["admin_password"] = hashed
         return redirect(url_for("config_edit"))
 
+    @app.route("/config/test-email", methods=["POST"])
+    @login_required
+    def config_test_email():
+        from mediacleaner import notify
+        try:
+            notify.send("MediaCleaner Test", "This is a test email from MediaCleaner.")
+            return redirect(url_for("config_edit") + "?msg=sent")
+        except Exception as e:
+            return redirect(url_for("config_edit") + f"?msg=fail&err={e}")
+
     @app.route("/confirm/keep/<token>")
     def confirm_keep(token):
         """Public URL — no auth required. User clicks to cancel a pending deletion."""

@@ -6,18 +6,19 @@
 <form method="post">
   <label for="scope">Scope</label>
   <select name="scope" id="scope">
-    <option value="category" {{ "selected" if (rule and rule.scope == "category") or (not rule and request.args.get("scope") == "category") }}>Category</option>
-    <option value="show" {{ "selected" if (rule and rule.scope == "show") or (not rule and request.args.get("scope") == "show") }}>Show</option>
-    <option value="media" {{ "selected" if (rule and rule.scope == "media") or (not rule and request.args.get("scope") == "media") }}>Media</option>
+    <option value="library" {{ "selected" if (rule and rule.scope == "library") or (not rule and request.args.get("scope") == "library") }}>Library</option>
+    <option value="show" {{ "selected" if (rule and rule.scope == "show") or (not rule and request.args.get("scope") == "show") }}>Show / Movie</option>
+    <option value="season" {{ "selected" if (rule and rule.scope == "season") or (not rule and request.args.get("scope") == "season") }}>Season</option>
+    <option value="episode" {{ "selected" if (rule and rule.scope == "episode") or (not rule and request.args.get("scope") == "episode") }}>Episode</option>
   </select>
 
-  <label for="plex_library">Plex Library (for category rules)</label>
+  <label for="plex_library">Library Name <small>(for Library scope — e.g., "TV Shows", "Movies", "Anime")</small></label>
   <input name="plex_library" id="plex_library" value="{{ rule.plex_library or '' if rule else request.args.get('plex_library', '') }}">
 
-  <label for="plex_rating_key">Plex Rating Key (for show/media rules)</label>
+  <label for="plex_rating_key">Plex Rating Key <small>(for Show/Season/Episode scope — identifies the specific item)</small></label>
   <input name="plex_rating_key" id="plex_rating_key" value="{{ rule.plex_rating_key or '' if rule else request.args.get('plex_rating_key', '') }}">
 
-  <label for="media_title">Media Title (display only)</label>
+  <label for="media_title">Title <small>(display only)</small></label>
   <input name="media_title" id="media_title" value="{{ rule.media_title or '' if rule else request.args.get('media_title', '') }}">
 
   <label for="action">Action</label>

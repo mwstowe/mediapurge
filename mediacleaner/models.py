@@ -14,7 +14,7 @@ class Rule(Base):
     __tablename__ = "rules"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    scope: Mapped[str] = mapped_column(Enum("category", "show", "media", name="rule_scope"))
+    scope: Mapped[str] = mapped_column(Enum("library", "show", "season", "episode", name="rule_scope"))
     plex_library: Mapped[str | None] = mapped_column(String, nullable=True)
     plex_rating_key: Mapped[str | None] = mapped_column(String, nullable=True)
     media_title: Mapped[str | None] = mapped_column(String, nullable=True)

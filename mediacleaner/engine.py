@@ -84,26 +84,35 @@ def find_manager(item) -> tuple[str, int | None]:
 
 
 def resolve_rule(item, library_name: str) -> Rule | None:
-    """Find the most specific rule: media > show > category."""
+    """Find the most specific rule: episode > season > show > library."""
     session = get_session()
     key = str(item.ratingKey)
 
-    # Media-specific rule (exact item)
+    # Episode-specific rule
     rule = session.execute(
-        select(Rule).where(Rule.scope == "media", Rule.plex_rating_key == key, Rule.enabled == True)
+        select(Rule).where(Rule.scope == "episode", Rule.plex_rating_key == key, Rule.enabled == True)
     ).scalar_one_or_none()
 
     if rule is None:
-        # Show-level rule (for a TV show, matched by rating key of the show)
+        # Season-level rule (match by season rating key)
+        season_key = str(getattr(item, "parentRatingKey", ""))
+        if season_key:
+            rule = session.execute(
+                select(Rule).where(Rule.scope == "season", Rule.plex_rating_key == season_key, Rule.enabled == True)
+            ).scalar_one_or_none()
+
+    if rule is None:
+        # Show/movie-level rule
+        show_key = str(getattr(item, "grandparentRatingKey", getattr(item, "ratingKey", "")))
         rule = session.execute(
-            select(Rule).where(Rule.scope == "show", Rule.plex_rating_key == key, Rule.enabled == True)
+            select(Rule).where(Rule.scope == "show", Rule.plex_rating_key == show_key, Rule.enabled == True)
         ).scalar_one_or_none()
 
     if rule is None:
-        # Category-level rule
+        # Library-level rule
         rule = session.execute(
             select(Rule).where(
-                Rule.scope == "category", Rule.plex_library == library_name, Rule.enabled == True
+                Rule.scope == "library", Rule.plex_library == library_name, Rule.enabled == True
             )
         ).scalar_one_or_none()
 
