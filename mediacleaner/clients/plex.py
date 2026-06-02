@@ -10,6 +10,16 @@ def _server() -> PlexServer:
     return PlexServer(cfg["url"], cfg["token"])
 
 
+def get_users() -> list[dict]:
+    """Return all Plex home/managed users with name and email."""
+    server = _server()
+    account = server.myPlexAccount()
+    users = [{"username": account.username, "email": account.email}]
+    for user in account.users():
+        users.append({"username": user.username or user.title, "email": user.email or ""})
+    return users
+
+
 def get_libraries() -> list[str]:
     return [s.title for s in _server().library.sections()]
 

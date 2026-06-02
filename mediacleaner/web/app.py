@@ -80,7 +80,7 @@ def create_app() -> Flask:
                 max_days_age=int(request.form.get("max_days_age", 0)),
                 max_days_inactive=int(request.form.get("max_days_inactive", 0)),
                 min_episodes=int(request.form.get("min_episodes", 0)),
-                watched_by=request.form.get("watched_by", "any"),
+                watched_by=",".join(request.form.getlist("watched_by")) or "any",
                 protect_on_deck="protect_on_deck" in request.form,
                 all_watched="all_watched" in request.form,
                 confirm_before_delete="confirm_before_delete" in request.form,
@@ -104,7 +104,13 @@ def create_app() -> Flask:
                               "year": getattr(item, "year", "")}
             except Exception:
                 pass
-        return render_template("rule_form.html", rule=None, breadcrumb=breadcrumb)
+        # Get Plex users for dropdowns
+        try:
+            from mediacleaner.clients import plex as plex_client
+            plex_users = plex_client.get_users()
+        except Exception:
+            plex_users = []
+        return render_template("rule_form.html", rule=None, breadcrumb=breadcrumb, plex_users=plex_users)
 
     @app.route("/rules/<int:rule_id>/edit", methods=["GET", "POST"])
     @login_required
@@ -121,7 +127,7 @@ def create_app() -> Flask:
             rule.max_days_age = int(request.form.get("max_days_age", 0))
             rule.max_days_inactive = int(request.form.get("max_days_inactive", 0))
             rule.min_episodes = int(request.form.get("min_episodes", 0))
-            rule.watched_by = request.form.get("watched_by", "any")
+            rule.watched_by = ",".join(request.form.getlist("watched_by")) or "any"
             rule.protect_on_deck = "protect_on_deck" in request.form
             rule.all_watched = "all_watched" in request.form
             rule.confirm_before_delete = "confirm_before_delete" in request.form
@@ -133,7 +139,12 @@ def create_app() -> Flask:
             db.close()
             return redirect(url_for("rules_list"))
         db.close()
-        return render_template("rule_form.html", rule=rule)
+        try:
+            from mediacleaner.clients import plex as plex_client
+            plex_users = plex_client.get_users()
+        except Exception:
+            plex_users = []
+        return render_template("rule_form.html", rule=rule, breadcrumb=None, plex_users=plex_users)
 
     @app.route("/rules/<int:rule_id>/delete", methods=["POST"])
     @login_required

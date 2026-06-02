@@ -49,8 +49,19 @@
   <label for="min_episodes">Min Episodes to Keep</label>
   <input type="number" name="min_episodes" id="min_episodes" value="{{ rule.min_episodes if rule else 0 }}">
 
-  <label for="watched_by">Watched By (comma-separated usernames, or "any")</label>
-  <input name="watched_by" id="watched_by" value="{{ rule.watched_by if rule else 'any' }}">
+  <label for="watched_by">Watched By</label>
+  <div style="margin:0.3rem 0 0.5rem;">
+    <label style="display:inline;margin-right:1rem;">
+      <input type="checkbox" name="watched_by" value="any"
+        {{ "checked" if (rule and "any" in rule.watched_by) or not rule }}> Any user
+    </label>
+    {% for u in plex_users %}
+    <label style="display:inline;margin-right:1rem;">
+      <input type="checkbox" name="watched_by" value="{{ u.username }}"
+        {{ "checked" if rule and u.username in rule.watched_by }}> {{ u.username }}
+    </label>
+    {% endfor %}
+  </div>
 
   <label><input type="checkbox" name="protect_on_deck" {{ "checked" if not rule or rule.protect_on_deck }}> Protect On Deck</label>
   <label><input type="checkbox" name="all_watched" {{ "checked" if rule and rule.all_watched }}> Require ALL episodes watched (shows)</label>
@@ -66,8 +77,15 @@
     <option value="mark_unwatched" {{ "selected" if rule and rule.confirm_method == "mark_unwatched" }}>Mark as unwatched to keep</option>
   </select>
 
-  <label for="confirm_email">Confirmation email recipient (optional override)</label>
-  <input type="email" name="confirm_email" id="confirm_email" value="{{ rule.confirm_email or '' if rule else '' }}">
+  <label for="confirm_email">Confirmation email recipient</label>
+  <select name="confirm_email" id="confirm_email">
+    <option value="">— Default (global notification) —</option>
+    {% for u in plex_users %}
+    {% if u.email %}
+    <option value="{{ u.email }}" {{ "selected" if rule and rule.confirm_email == u.email }}>{{ u.username }} ({{ u.email }})</option>
+    {% endif %}
+    {% endfor %}
+  </select>
 
   <label><input type="checkbox" name="enabled" {{ "checked" if not rule or rule.enabled }}> Enabled</label>
 
