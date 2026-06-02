@@ -12,12 +12,9 @@ log = logging.getLogger(__name__)
 
 
 def _default_recipient() -> str:
-    """Get admin email from Plex account."""
-    try:
-        from mediacleaner.clients.plex import _server
-        return _server().myPlexAccount().email
-    except Exception:
-        return ""
+    """Get admin email from config."""
+    cfg = get_config().get("notifications", {}).get("email", {})
+    return cfg.get("admin", "")
 
 
 def send(subject: str, body: str):
@@ -43,7 +40,7 @@ def send_to(subject: str, body: str, recipient: str):
 def _send_email(subject: str, body: str, cfg: dict, recipient: str):
     msg = EmailMessage()
     msg["Subject"] = subject
-    msg["From"] = cfg.get("smtp_user", "mediacleaner@localhost")
+    msg["From"] = cfg.get("from", cfg.get("smtp_user", "mediacleaner@localhost"))
     msg["To"] = recipient
     msg.set_content(body)
 

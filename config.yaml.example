@@ -33,6 +33,8 @@ notifications:
   enabled: false
   method: email  # email | discord
   email:
+    from: mediacleaner@stowe.network
+    admin: mstowe@stowe.network
     smtp_host: smtp.example.com
     smtp_port: 587
     smtp_user: ""
