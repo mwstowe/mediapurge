@@ -8,9 +8,13 @@ def _base() -> tuple[str, dict]:
     return cfg["url"].rstrip("/"), {"X-Api-Key": cfg["api_key"]}
 
 
+def _get(url, headers):
+    return requests.get(url, headers=headers, verify=False)
+
+
 def get_all_shows() -> list[dict]:
     url, headers = _base()
-    r = requests.get(f"{url}/api/v2/series", headers=headers)
+    r = _get(f"{url}/api/v2/series", headers)
     r.raise_for_status()
     return r.json()
 
@@ -29,5 +33,6 @@ def delete_show(show_slug: str, remove_files: bool = True):
         f"{url}/api/v2/series/{show_slug}",
         headers=headers,
         params={"removeFiles": str(remove_files).lower()},
+        verify=False,
     )
     r.raise_for_status()
