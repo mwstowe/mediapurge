@@ -201,9 +201,15 @@ def create_app() -> Flask:
         """List items in a library."""
         from mediacleaner.clients import plex as plex_client
         items = plex_client.get_library_items(library)
-        items_data = [{"title": i.title, "rating_key": i.ratingKey, "type": i.type,
-                       "year": getattr(i, "year", ""),
-                       "thumb": i.thumb} for i in items]
+        items_data = []
+        for i in items:
+            info = plex_client.get_last_viewed_info(i)
+            items_data.append({
+                "title": i.title, "rating_key": i.ratingKey, "type": i.type,
+                "year": getattr(i, "year", ""), "thumb": i.thumb,
+                "viewed_at": info["viewed_at"].strftime("%Y-%m-%d") if info["viewed_at"] else "Never",
+                "viewed_by": info["viewed_by"] or "—",
+            })
         return render_template("browse.html", libraries=None, items=items_data,
                                library=library, item=None, children=None)
 
@@ -218,11 +224,14 @@ def create_app() -> Flask:
         if item.type == "show":
             for season in item.seasons():
                 for ep in season.episodes():
+                    info = plex_client.get_last_viewed_info(ep)
                     children.append({
                         "title": f"S{ep.parentIndex:02d}E{ep.index:02d} - {ep.title}",
                         "rating_key": ep.ratingKey,
                         "watched": ep.isWatched,
                         "thumb": ep.thumb,
+                        "viewed_at": info["viewed_at"].strftime("%Y-%m-%d") if info["viewed_at"] else "—",
+                        "viewed_by": info["viewed_by"] or "—",
                     })
         item_data = {"title": item.title, "rating_key": item.ratingKey, "type": item.type,
                      "year": getattr(item, "year", ""), "thumb": item.thumb}

@@ -80,6 +80,34 @@ def days_since_watched(last_viewed_at: datetime | None) -> int | None:
     return (now - last_viewed_at).days
 
 
+def get_last_viewed_info(item) -> dict:
+    """Get last viewed date and which user viewed it for a media item."""
+    viewed_at = getattr(item, "lastViewedAt", None)
+    # Try to get the user from history
+    viewed_by = None
+    try:
+        history = item.history()
+        if history:
+            latest = history[0]
+            viewed_by = getattr(latest, "accountID", None)
+            if not viewed_at:
+                viewed_at = getattr(latest, "viewedAt", None)
+            # Resolve accountID to username
+            if viewed_by:
+                server = _server()
+                account = server.myPlexAccount()
+                if viewed_by == account.id:
+                    viewed_by = account.username
+                else:
+                    for u in account.users():
+                        if u.id == viewed_by:
+                            viewed_by = u.username or u.title
+                            break
+    except Exception:
+        pass
+    return {"viewed_at": viewed_at, "viewed_by": viewed_by}
+
+
 def days_since_last_activity(show) -> int | None:
     """Return days since the most recent watch of any episode in a show."""
     latest = None
