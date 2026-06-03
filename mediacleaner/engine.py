@@ -368,20 +368,21 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
                 # Show-scoped rules evaluate per-episode
                 if r.scope == "show" and hasattr(item, "episodes"):
                     triggered = False
+                    pending_eps = []
                     for ep, action, reason in evaluate_show_episodes(item, r):
                         if action == "delete_show":
-                            result = EvalResult(
+                            report.results.append(EvalResult(
                                 title=title, rating_key=key, action="delete",
                                 rule_id=r.id, reason=reason,
                                 manager=manager, manager_id=manager_id,
-                            )
-                            report.results.append(result)
+                            ))
                             session.add(ActionLog(
                                 media_title=title, plex_rating_key=key,
                                 rule_id=r.id, action_taken="delete", dry_run=dry_run,
                                 details=json.dumps({"reason": reason, "manager": manager, "scope": "whole_show"}),
                             ))
                             triggered = True
+                            pending_eps = []
                             break
                         elif action == "pending_confirm" and getattr(ep, "type", "") != "episode":
                             _handle_pending_confirm(session, r, key, title, dry_run)
@@ -390,22 +391,37 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
                                 rule_id=r.id, reason=reason, manager=manager, manager_id=manager_id,
                             ))
                             triggered = True
+                            pending_eps = []
                             break
-                        elif action in ("delete", "pending_confirm"):
+                        elif action == "delete":
                             ep_title = f"{title} - S{ep.parentIndex:02d}E{ep.index:02d}"
-                            result = EvalResult(
-                                title=ep_title, rating_key=str(ep.ratingKey), action=action,
+                            report.results.append(EvalResult(
+                                title=ep_title, rating_key=str(ep.ratingKey), action="delete",
                                 rule_id=r.id, reason=reason,
                                 manager=manager, manager_id=manager_id,
-                            )
-                            report.results.append(result)
-                            if action == "delete":
-                                session.add(ActionLog(
-                                    media_title=ep_title, plex_rating_key=str(ep.ratingKey),
-                                    rule_id=r.id, action_taken="delete", dry_run=dry_run,
-                                    details=json.dumps({"reason": reason, "manager": manager}),
-                                ))
+                            ))
+                            session.add(ActionLog(
+                                media_title=ep_title, plex_rating_key=str(ep.ratingKey),
+                                rule_id=r.id, action_taken="delete", dry_run=dry_run,
+                                details=json.dumps({"reason": reason, "manager": manager}),
+                            ))
                             triggered = True
+                        elif action == "pending_confirm":
+                            pending_eps.append(f"S{ep.parentIndex:02d}E{ep.index:02d}")
+                            triggered = True
+
+                    # Group episode pending_confirms into one show-level notification
+                    if pending_eps:
+                        ep_list = ", ".join(pending_eps[:5])
+                        if len(pending_eps) > 5:
+                            ep_list += f" +{len(pending_eps) - 5} more"
+                        reason = _pending_reason(r, f"{len(pending_eps)} eps ({ep_list})", key)
+                        _handle_pending_confirm(session, r, key, title, dry_run)
+                        report.results.append(EvalResult(
+                            title=title, rating_key=key, action="pending_confirm",
+                            rule_id=r.id, reason=reason, manager=manager, manager_id=manager_id,
+                        ))
+
                     if triggered:
                         break
                     continue
