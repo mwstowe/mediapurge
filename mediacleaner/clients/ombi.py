@@ -45,20 +45,20 @@ def cleanup_for_title(title: str):
 
 
 def approve_managed_requests(managed_titles: set[str]):
-    """Approve Ombi requests that are already managed by an arr."""
+    """Mark Ombi requests as available when already managed by an arr (skips Sonarr forwarding)."""
     url, headers = _base()
     approved = []
 
     for req in get_movie_requests():
-        if not req.get("approved") and req.get("title", "").lower() in managed_titles:
-            r = requests.post(f"{url}/api/v1/Request/movie/approve", headers=headers, json={"id": req["id"]})
+        if not req.get("available") and req.get("title", "").lower() in managed_titles:
+            r = requests.post(f"{url}/api/v1/Request/movie/available", headers=headers, json={"id": req["id"]})
             if r.status_code == 200:
                 approved.append(req["title"])
 
     for req in get_tv_requests():
         for child in req.get("childRequests", []):
-            if not child.get("approved") and req.get("title", "").lower() in managed_titles:
-                r = requests.post(f"{url}/api/v1/Request/tv/approve", headers=headers, json={"id": child["id"]})
+            if not child.get("available") and req.get("title", "").lower() in managed_titles:
+                r = requests.post(f"{url}/api/v1/Request/tv/available", headers=headers, json={"id": child["id"]})
                 if r.status_code == 200:
                     approved.append(req["title"])
                 break
