@@ -63,6 +63,17 @@ def sync_managed_media():
     session.commit()
     session.close()
 
+    # Auto-approve Ombi requests for already-managed media
+    try:
+        s2 = get_session()
+        managed_titles = {m.title.lower() for m in s2.query(ManagedMedia).all()}
+        s2.close()
+        approved = ombi.approve_managed_requests(managed_titles)
+        if approved:
+            log.info(f"Auto-approved Ombi requests: {approved}")
+    except Exception as e:
+        log.warning(f"Ombi approval sync failed: {e}")
+
 
 def _is_show_ended(show) -> bool:
     """Check if a show has ended by querying the managing app."""
