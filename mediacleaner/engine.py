@@ -328,26 +328,25 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
                             manager=manager, manager_id=manager_id,
                         )
                         report.results.append(result)
-                        if action != "keep":
-                            session.add(ActionLog(
-                                media_title=title, plex_rating_key=key,
-                                rule_id=rule.id, action_taken="delete", dry_run=dry_run,
-                                details=json.dumps({"reason": reason, "manager": manager, "scope": "whole_show"}),
-                            ))
+                        session.add(ActionLog(
+                            media_title=title, plex_rating_key=key,
+                            rule_id=rule.id, action_taken="delete", dry_run=dry_run,
+                            details=json.dumps({"reason": reason, "manager": manager, "scope": "whole_show"}),
+                        ))
                         break
-                    elif action == "pending_confirm":
+                    elif action == "pending_confirm" and not hasattr(ep, "index"):
+                        # Show-level pending confirm (from all_watched or inactivity)
                         _handle_pending_confirm(session, rule, key, title, dry_run)
                         report.results.append(EvalResult(
                             title=title, rating_key=key, action="pending_confirm",
                             rule_id=rule.id, reason=reason, manager=manager, manager_id=manager_id,
                         ))
                         break
-                    else:
-                        ep_title = f"{title} - S{ep.parentIndex:02d}E{ep.index:02d}" if action == "delete" else title
+                    elif action in ("delete", "pending_confirm"):
+                        ep_title = f"{title} - S{ep.parentIndex:02d}E{ep.index:02d}"
                         result = EvalResult(
-                            title=ep_title if action == "delete" else title,
-                            rating_key=str(ep.ratingKey) if action == "delete" else key,
-                            action=action, rule_id=rule.id, reason=reason,
+                            title=ep_title, rating_key=str(ep.ratingKey), action=action,
+                            rule_id=rule.id, reason=reason,
                             manager=manager, manager_id=manager_id,
                         )
                         report.results.append(result)
