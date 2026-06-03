@@ -33,6 +33,7 @@ class Rule(Base):
         Enum("url_click", "start_watching", "mark_unwatched", name="confirm_method"), nullable=True
     )
     confirm_email: Mapped[str | None] = mapped_column(String, nullable=True)
+    snoozed_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)

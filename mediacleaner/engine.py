@@ -125,6 +125,11 @@ def evaluate_item(item, rule: Rule) -> tuple[str, str]:
     if rule.action == "keep":
         return "keep", "rule action is keep"
 
+    # Check if rule is snoozed
+    if rule.snoozed_until and datetime.now(timezone.utc) < rule.snoozed_until:
+        days_left = (rule.snoozed_until - datetime.now(timezone.utc)).days
+        return "keep", f"snoozed for {days_left} more days"
+
     # Check on-deck protection
     if rule.protect_on_deck and plex.is_on_deck(item):
         return "keep", "protected: on deck"
@@ -161,6 +166,11 @@ def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
     May return the show itself as the item if the whole show should be deleted."""
     if rule.action == "keep":
         return [(show, "keep", "rule action is keep")]
+
+    # Check if rule is snoozed
+    if rule.snoozed_until and datetime.now(timezone.utc) < rule.snoozed_until:
+        days_left = (rule.snoozed_until - datetime.now(timezone.utc)).days
+        return [(show, "keep", f"snoozed for {days_left} more days")]
 
     # Check all_watched condition — all episodes must be watched before any action
     if rule.all_watched:
@@ -532,6 +542,11 @@ def process_pending_actions():
         # Check if user cancelled via Plex activity
         if _user_cancelled_via_plex(pa):
             pa.cancelled = True
+            # Snooze the rule
+            rule = session.get(Rule, pa.rule_id)
+            if rule:
+                snooze_days = max(rule.max_days_inactive, rule.min_days_watched, rule.confirm_days)
+                rule.snoozed_until = datetime.now(timezone.utc) + timedelta(days=snooze_days)
             log.info(f"Pending deletion cancelled by user activity: {pa.media_title}")
             session.add(ActionLog(
                 media_title=pa.media_title, plex_rating_key=pa.plex_rating_key,
@@ -600,13 +615,19 @@ def _user_cancelled_via_plex(pa: PendingAction) -> bool:
 
 
 def cancel_pending_by_token(token: str) -> bool:
-    """Cancel a pending deletion via URL token. Returns True if found."""
+    """Cancel a pending deletion via URL token. Snoozes the rule for its full period."""
     session = get_session()
     pa = session.execute(
         select(PendingAction).where(PendingAction.token == token)
     ).scalar_one_or_none()
     if pa and not pa.confirmed:
         pa.cancelled = True
+        # Snooze the rule so it won't re-trigger immediately
+        rule = session.get(Rule, pa.rule_id)
+        if rule:
+            # Reset timer: snooze for the longer of max_days_inactive or confirm_days
+            snooze_days = max(rule.max_days_inactive, rule.min_days_watched, rule.confirm_days)
+            rule.snoozed_until = datetime.now(timezone.utc) + timedelta(days=snooze_days)
         session.commit()
         session.close()
         return True
