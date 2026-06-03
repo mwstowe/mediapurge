@@ -342,7 +342,7 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
                             details=json.dumps({"reason": reason, "manager": manager, "scope": "whole_show"}),
                         ))
                         break
-                    elif action == "pending_confirm" and not hasattr(ep, "index"):
+                    elif action == "pending_confirm" and getattr(ep, "type", "") != "episode":
                         # Show-level pending confirm (from all_watched or inactivity)
                         _handle_pending_confirm(session, rule, key, title, dry_run)
                         report.results.append(EvalResult(
