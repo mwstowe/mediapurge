@@ -45,7 +45,7 @@ def ignore_episode(show_slug: str, season: int, episode: int):
     r = requests.patch(
         f"{url}/api/v2/series/{show_slug}/episodes/{ep_id}",
         headers=headers,
-        json={"status": "Ignored"},
+        json={"status": 7},
         verify=False,
     )
     r.raise_for_status()
