@@ -114,41 +114,39 @@ def find_manager(item) -> tuple[str, int | None]:
     return matches[0]
 
 
-def resolve_rule(item, library_name: str) -> Rule | None:
-    """Find the most specific rule: episode > season > show > library."""
+def resolve_rules(item, library_name: str) -> list[Rule]:
+    """Find all matching rules at the most specific scope: episode > season > show > library."""
     session = get_session()
     key = str(item.ratingKey)
 
-    # Episode-specific rule
-    rule = session.execute(
+    # Episode-specific rules
+    rules = session.execute(
         select(Rule).where(Rule.scope == "episode", Rule.plex_rating_key == key, Rule.enabled == True)
-    ).scalar_one_or_none()
+    ).scalars().all()
 
-    if rule is None:
-        # Season-level rule (match by season rating key)
+    if not rules:
+        # Season-level rules
         season_key = str(getattr(item, "parentRatingKey", ""))
         if season_key:
-            rule = session.execute(
+            rules = session.execute(
                 select(Rule).where(Rule.scope == "season", Rule.plex_rating_key == season_key, Rule.enabled == True)
-            ).scalar_one_or_none()
+            ).scalars().all()
 
-    if rule is None:
-        # Show/movie-level rule
+    if not rules:
+        # Show/movie-level rules
         show_key = str(getattr(item, "grandparentRatingKey", getattr(item, "ratingKey", "")))
-        rule = session.execute(
+        rules = session.execute(
             select(Rule).where(Rule.scope == "show", Rule.plex_rating_key == show_key, Rule.enabled == True)
-        ).scalar_one_or_none()
+        ).scalars().all()
 
-    if rule is None:
-        # Library-level rule
-        rule = session.execute(
-            select(Rule).where(
-                Rule.scope == "library", Rule.plex_library == library_name, Rule.enabled == True
-            )
-        ).scalar_one_or_none()
+    if not rules:
+        # Library-level rules
+        rules = session.execute(
+            select(Rule).where(Rule.scope == "library", Rule.plex_library == library_name, Rule.enabled == True)
+        ).scalars().all()
 
     session.close()
-    return rule
+    return rules
 
 
 def evaluate_item(item, rule: Rule) -> tuple[str, str]:
@@ -320,66 +318,74 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
             key = str(item.ratingKey)
             title = item.title
 
-            rule = resolve_rule(item, lib_name)
-            if rule is None:
-                continue  # no rule, default keep
+            rule = resolve_rules(item, lib_name)
+            if not rule:
+                continue  # no rules, default keep
 
             manager, manager_id = find_manager(item)
 
-            # Show-scoped rules evaluate per-episode
-            if rule.scope == "show" and hasattr(item, "episodes"):
-                for ep, action, reason in evaluate_show_episodes(item, rule):
-                    if action == "delete_show":
-                        result = EvalResult(
-                            title=title, rating_key=key, action="delete",
-                            rule_id=rule.id, reason=reason,
-                            manager=manager, manager_id=manager_id,
-                        )
-                        report.results.append(result)
-                        session.add(ActionLog(
-                            media_title=title, plex_rating_key=key,
-                            rule_id=rule.id, action_taken="delete", dry_run=dry_run,
-                            details=json.dumps({"reason": reason, "manager": manager, "scope": "whole_show"}),
-                        ))
-                        break
-                    elif action == "pending_confirm" and getattr(ep, "type", "") != "episode":
-                        # Show-level pending confirm (from all_watched or inactivity)
-                        _handle_pending_confirm(session, rule, key, title, dry_run)
-                        report.results.append(EvalResult(
-                            title=title, rating_key=key, action="pending_confirm",
-                            rule_id=rule.id, reason=reason, manager=manager, manager_id=manager_id,
-                        ))
-                        break
-                    elif action in ("delete", "pending_confirm"):
-                        ep_title = f"{title} - S{ep.parentIndex:02d}E{ep.index:02d}"
-                        result = EvalResult(
-                            title=ep_title, rating_key=str(ep.ratingKey), action=action,
-                            rule_id=rule.id, reason=reason,
-                            manager=manager, manager_id=manager_id,
-                        )
-                        report.results.append(result)
-                        if action == "delete":
+            # Evaluate each matching rule; first one that triggers wins
+            for r in rule:
+                # Show-scoped rules evaluate per-episode
+                if r.scope == "show" and hasattr(item, "episodes"):
+                    triggered = False
+                    for ep, action, reason in evaluate_show_episodes(item, r):
+                        if action == "delete_show":
+                            result = EvalResult(
+                                title=title, rating_key=key, action="delete",
+                                rule_id=r.id, reason=reason,
+                                manager=manager, manager_id=manager_id,
+                            )
+                            report.results.append(result)
                             session.add(ActionLog(
-                                media_title=ep_title, plex_rating_key=str(ep.ratingKey),
-                                rule_id=rule.id, action_taken="delete", dry_run=dry_run,
-                                details=json.dumps({"reason": reason, "manager": manager}),
+                                media_title=title, plex_rating_key=key,
+                                rule_id=r.id, action_taken="delete", dry_run=dry_run,
+                                details=json.dumps({"reason": reason, "manager": manager, "scope": "whole_show"}),
                             ))
-                continue
+                            triggered = True
+                            break
+                        elif action == "pending_confirm" and getattr(ep, "type", "") != "episode":
+                            _handle_pending_confirm(session, r, key, title, dry_run)
+                            report.results.append(EvalResult(
+                                title=title, rating_key=key, action="pending_confirm",
+                                rule_id=r.id, reason=reason, manager=manager, manager_id=manager_id,
+                            ))
+                            triggered = True
+                            break
+                        elif action in ("delete", "pending_confirm"):
+                            ep_title = f"{title} - S{ep.parentIndex:02d}E{ep.index:02d}"
+                            result = EvalResult(
+                                title=ep_title, rating_key=str(ep.ratingKey), action=action,
+                                rule_id=r.id, reason=reason,
+                                manager=manager, manager_id=manager_id,
+                            )
+                            report.results.append(result)
+                            if action == "delete":
+                                session.add(ActionLog(
+                                    media_title=ep_title, plex_rating_key=str(ep.ratingKey),
+                                    rule_id=r.id, action_taken="delete", dry_run=dry_run,
+                                    details=json.dumps({"reason": reason, "manager": manager}),
+                                ))
+                            triggered = True
+                    if triggered:
+                        break
+                    continue
 
-            action, reason = evaluate_item(item, rule)
-            result = EvalResult(
-                title=title, rating_key=key, action=action,
-                rule_id=rule.id, reason=reason,
-                manager=manager, manager_id=manager_id,
-            )
-            report.results.append(result)
-
-            if action == "delete":
-                session.add(ActionLog(
-                    media_title=title, plex_rating_key=key, rule_id=rule.id,
-                    action_taken="delete", dry_run=dry_run,
-                    details=json.dumps({"reason": reason, "manager": manager}),
-                ))
+                action, reason = evaluate_item(item, r)
+                if action != "keep":
+                    result = EvalResult(
+                        title=title, rating_key=key, action=action,
+                        rule_id=r.id, reason=reason,
+                        manager=manager, manager_id=manager_id,
+                    )
+                    report.results.append(result)
+                    if action == "delete":
+                        session.add(ActionLog(
+                            media_title=title, plex_rating_key=key, rule_id=r.id,
+                            action_taken="delete", dry_run=dry_run,
+                            details=json.dumps({"reason": reason, "manager": manager}),
+                        ))
+                    break  # first triggering rule wins
 
     session.commit()
     session.close()
