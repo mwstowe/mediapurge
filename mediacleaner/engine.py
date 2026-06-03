@@ -181,11 +181,15 @@ def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
     if rule.max_days_inactive > 0:
         inactive_days = plex.days_since_last_activity(show)
         if inactive_days is not None and inactive_days >= rule.max_days_inactive:
+            if rule.confirm_before_delete:
+                return [(show, "pending_confirm", f"inactive {inactive_days}d (limit {rule.max_days_inactive}d), awaiting confirmation")]
             return [(show, "delete_show", f"inactive {inactive_days}d (limit {rule.max_days_inactive}d)")]
         # If never watched and added long ago, also consider inactive
         if inactive_days is None:
             age = plex.days_since_added(show)
             if age >= rule.max_days_inactive:
+                if rule.confirm_before_delete:
+                    return [(show, "pending_confirm", f"never watched, added {age}d ago, awaiting confirmation")]
                 return [(show, "delete_show", f"never watched, added {age}d ago (limit {rule.max_days_inactive}d)")]
 
     episodes = show.episodes()
@@ -232,6 +236,13 @@ def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
             continue
 
         results.append((ep, "delete", f"watched {days}d ago by {rule.watched_by}"))
+
+    # If confirm is set and we have deletes, convert them to pending
+    if rule.confirm_before_delete:
+        results = [
+            (item, "pending_confirm" if action == "delete" else action, reason)
+            for item, action, reason in results
+        ]
 
     return results
 
