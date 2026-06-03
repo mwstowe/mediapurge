@@ -178,30 +178,67 @@ def create_app() -> Flask:
         db.close()
         return render_template("log.html", logs=logs)
 
+    # Background task state
+    _task = {"running": False, "report": None, "error": None, "mode": None}
+
+    def _run_task(dry_run):
+        try:
+            sync_managed_media()
+            report = run_evaluation(dry_run=dry_run)
+            if not dry_run:
+                from mediacleaner.engine import execute_deletions, process_pending_actions
+                process_pending_actions()
+                execute_deletions(report)
+            _task["report"] = report
+        except Exception as e:
+            _task["error"] = str(e)
+        _task["running"] = False
+
     @app.route("/preview")
     @login_required
     def preview():
-        if request.args.get("mode") != "preview":
-            return render_template("preview.html", report=None, error=None, ran=False)
-        try:
-            sync_managed_media()
-            report = run_evaluation(dry_run=True)
-        except Exception as e:
-            return render_template("preview.html", report=None, error=str(e), ran=False)
-        return render_template("preview.html", report=report, error=None, ran=False)
+        mode = request.args.get("mode")
+        if mode not in ("preview", "run"):
+            return render_template("preview.html", report=None, error=None, ran=False, running=False)
+        if not _task["running"]:
+            _task["running"] = True
+            _task["report"] = None
+            _task["error"] = None
+            _task["mode"] = mode
+            import threading
+            dry_run = mode == "preview"
+            threading.Thread(target=_run_task, args=(dry_run,), daemon=True).start()
+        return render_template("preview.html", report=None, error=None, ran=False, running=True)
+
+    @app.route("/preview/status")
+    @login_required
+    def preview_status():
+        import json as jsonlib
+        if _task["running"]:
+            return jsonlib.dumps({"running": True})
+        if _task["error"]:
+            return jsonlib.dumps({"running": False, "error": _task["error"]})
+        return jsonlib.dumps({"running": False, "done": True})
+
+    @app.route("/preview/results")
+    @login_required
+    def preview_results():
+        report = _task["report"]
+        error = _task["error"]
+        ran = _task["mode"] == "run"
+        return render_template("preview.html", report=report, error=error, ran=ran, running=False)
 
     @app.route("/run", methods=["POST"])
     @login_required
     def run_now():
-        from mediacleaner.engine import execute_deletions, process_pending_actions
-        try:
-            sync_managed_media()
-            report = run_evaluation(dry_run=False)
-            process_pending_actions()
-            execute_deletions(report)
-        except Exception as e:
-            return render_template("preview.html", report=None, error=str(e), ran=True)
-        return render_template("preview.html", report=report, error=None, ran=True)
+        if not _task["running"]:
+            _task["running"] = True
+            _task["report"] = None
+            _task["error"] = None
+            _task["mode"] = "run"
+            import threading
+            threading.Thread(target=_run_task, args=(False,), daemon=True).start()
+        return render_template("preview.html", report=None, error=None, ran=False, running=True)
 
     @app.route("/browse")
     @login_required

@@ -3,7 +3,25 @@
 {% block content %}
 <h1>Maintenance</h1>
 
-{% if not report and not error %}
+{% if running %}
+<div class="card">
+  <p id="status">⏳ Running... please wait.</p>
+</div>
+<script>
+(function poll() {
+  fetch("{{ url_for('preview_status') }}")
+    .then(r => r.json())
+    .then(data => {
+      if (data.running) {
+        setTimeout(poll, 2000);
+      } else {
+        window.location = "{{ url_for('preview_results') }}";
+      }
+    });
+})();
+</script>
+
+{% elif not report and not error %}
 <p>Run a dry-run preview to see what would happen, or execute maintenance immediately.</p>
 <form method="get" style="display:inline;">
   <button type="submit" class="btn btn-primary">Preview (Dry Run)</button>
