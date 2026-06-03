@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}">
 <title>{% block title %}MediaCleaner{% endblock %}</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -34,6 +35,7 @@ form input[type="checkbox"] { width: auto; }
 <body>
 {% if session.get('authed') %}
 <nav>
+  <img src="{{ url_for('static', filename='logo.svg') }}" style="height:28px;vertical-align:middle;" alt="">
   <span class="brand">MediaCleaner</span>
   <a href="{{ url_for('dashboard') }}">Dashboard</a>
   <a href="{{ url_for('rules_list') }}">Rules</a>
