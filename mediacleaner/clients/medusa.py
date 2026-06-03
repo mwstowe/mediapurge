@@ -32,7 +32,7 @@ def delete_show(show_slug: str, remove_files: bool = True):
     r = requests.delete(
         f"{url}/api/v2/series/{show_slug}",
         headers=headers,
-        params={"removeFiles": str(remove_files).lower()},
+        json={"remove": True, "removeFiles": remove_files},
         verify=False,
     )
     r.raise_for_status()

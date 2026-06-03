@@ -76,6 +76,6 @@ class ManagedMedia(Base):
     title: Mapped[str] = mapped_column(String)
     plex_library: Mapped[str | None] = mapped_column(String, nullable=True)
     manager: Mapped[str] = mapped_column(String)
-    manager_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    manager_id: Mapped[str | None] = mapped_column(String, nullable=True)
     file_path: Mapped[str | None] = mapped_column(String, nullable=True)
     last_synced: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)

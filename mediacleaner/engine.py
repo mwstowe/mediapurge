@@ -372,10 +372,10 @@ def execute_deletions(report: EngineReport):
             if result.manager == "sonarr":
                 _delete_via_sonarr(result)
             elif result.manager == "radarr":
-                radarr.delete_movie(result.manager_id, delete_files=True)
+                radarr.delete_movie(int(result.manager_id), delete_files=True)
                 ombi.cleanup_for_title(result.title)
             elif result.manager == "medusa":
-                medusa.delete_show(result.manager_id, remove_files=True)
+                medusa.delete_show(str(result.manager_id), remove_files=True)
                 ombi.cleanup_for_title(result.title)
 
             log.info(f"Deleted: {result.title} via {result.manager}")
