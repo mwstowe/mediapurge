@@ -217,14 +217,23 @@ def create_app() -> Flask:
         """List items in a library."""
         from mediacleaner.clients import plex as plex_client
         items = plex_client.get_library_items(library)
+        mgr_info = plex_client.get_manager_info()
         items_data = []
         for i in items:
             info = plex_client.get_last_viewed_info(i)
+            paths = plex_client.get_file_paths(i)
+            mgr = None
+            for p in paths:
+                if p in mgr_info:
+                    mgr = mgr_info[p]
+                    break
             items_data.append({
                 "title": i.title, "rating_key": i.ratingKey, "type": i.type,
                 "year": getattr(i, "year", ""), "thumb": i.thumb,
                 "viewed_at": info["viewed_at"].strftime("%Y-%m-%d") if info["viewed_at"] else "Never",
                 "viewed_by": info["viewed_by"] or "—",
+                "managers": ", ".join(mgr["managers"]) if mgr else "—",
+                "ended": mgr["ended"] if mgr else None,
             })
         return render_template("browse.html", libraries=None, items=items_data,
                                library=library, item=None, children=None)

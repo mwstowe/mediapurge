@@ -68,6 +68,46 @@ def _get_system_accounts():
     return {a.id: a.name for a in _server().systemAccounts()}
 
 
+def get_manager_info() -> dict:
+    """Build a lookup of file path -> {managers, ended} from Sonarr, Radarr, Medusa."""
+    from mediacleaner.clients import sonarr, radarr, medusa
+    import warnings
+    warnings.filterwarnings("ignore")
+    info = {}
+
+    try:
+        for s in sonarr.get_all_series():
+            path = s["path"]
+            info.setdefault(path, {"managers": [], "ended": None})
+            info[path]["managers"].append("Sonarr")
+            info[path]["ended"] = s.get("ended", s.get("status") == "ended")
+    except Exception:
+        pass
+
+    try:
+        for m in radarr.get_all_movies():
+            path = m.get("path", "")
+            if path:
+                info.setdefault(path, {"managers": [], "ended": None})
+                info[path]["managers"].append("Radarr")
+    except Exception:
+        pass
+
+    try:
+        for s in medusa.get_all_shows():
+            path = s.get("config", {}).get("location", "")
+            if path:
+                info.setdefault(path, {"managers": [], "ended": None})
+                info[path]["managers"].append("Medusa")
+                status = s.get("status", "")
+                if status:
+                    info[path]["ended"] = status.lower() == "ended"
+    except Exception:
+        pass
+
+    return info
+
+
 def get_library_items(library_name: str):
     """Return all items in a library section."""
     return _server().library.section(library_name).all()
