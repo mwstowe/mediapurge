@@ -87,8 +87,7 @@ def _is_show_ended(show) -> bool:
 
 
 def find_manager(item) -> tuple[str, int | None]:
-    """Determine which application manages a Plex item by matching file paths."""
-    """Determine which application manages a Plex item by matching file paths."""
+    """Determine which application manages a Plex item. Prefers medusa > sonarr > radarr."""
     paths = plex.get_file_paths(item)
     if not paths:
         return "none", None
@@ -97,13 +96,22 @@ def find_manager(item) -> tuple[str, int | None]:
     managed = session.execute(select(ManagedMedia)).scalars().all()
     session.close()
 
+    matches = []
     for m in managed:
         if not m.file_path:
             continue
         for p in paths:
             if p.startswith(m.file_path):
-                return m.manager, m.manager_id
-    return "none", None
+                matches.append((m.manager, m.manager_id))
+                break
+
+    if not matches:
+        return "none", None
+
+    # Priority: medusa > sonarr > radarr
+    priority = {"medusa": 0, "sonarr": 1, "radarr": 2}
+    matches.sort(key=lambda x: priority.get(x[0], 99))
+    return matches[0]
 
 
 def resolve_rule(item, library_name: str) -> Rule | None:
