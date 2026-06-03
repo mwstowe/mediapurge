@@ -60,7 +60,7 @@ def get_users() -> list[dict]:
 
 @_timed_lru_cache(seconds=300)
 def get_libraries():
-    return [s.title for s in _server().library.sections()]
+    return [(s.title, s.type) for s in _server().library.sections()]
 
 
 @_timed_lru_cache(seconds=120)

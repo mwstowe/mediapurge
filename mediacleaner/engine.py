@@ -293,7 +293,7 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
     excluded = cfg.get("maintenance", {}).get("excluded_libraries", [])
 
     try:
-        libraries = plex.get_libraries()
+        libraries = [name for name, _ in plex.get_libraries()]
     except Exception as e:
         report.errors.append(f"Failed to connect to Plex: {e}")
         return report
@@ -387,7 +387,7 @@ def run_orphan_scan() -> list[EvalResult]:
     orphans = []
 
     try:
-        libraries = plex.get_libraries()
+        libraries = [name for name, _ in plex.get_libraries()]
     except Exception:
         return orphans
 

@@ -5,10 +5,12 @@
 
 {% if libraries %}
 <h2>Libraries</h2>
-<ul>
-{% for lib in libraries %}
-  <li><a href="{{ url_for('browse_library', library=lib) }}">{{ lib }}</a>
-    — <a href="{{ url_for('rules_new') }}?scope=library&plex_library={{ lib }}" class="btn btn-sm btn-primary">+ Library Rule</a>
+<ul style="list-style:none;padding:0;">
+{% for name, type in libraries %}
+  <li style="margin:0.5rem 0;font-size:1.1rem;">
+    {% if type == "show" %}📺{% elif type == "movie" %}🎬{% else %}📁{% endif %}
+    <a href="{{ url_for('browse_library', library=name) }}">{{ name }}</a>
+    — <a href="{{ url_for('rules_new') }}?scope=library&plex_library={{ name }}" class="btn btn-sm btn-primary">+ Library Rule</a>
   </li>
 {% endfor %}
 </ul>
