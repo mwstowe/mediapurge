@@ -1,8 +1,29 @@
 from datetime import datetime, timezone
+from functools import lru_cache
+import time
 
 from plexapi.server import PlexServer
 
 from mediacleaner.config import get_config
+
+
+def _timed_lru_cache(seconds=300, maxsize=128):
+    """LRU cache with TTL expiry."""
+    def decorator(func):
+        func = lru_cache(maxsize=maxsize)(func)
+        func._expiry = time.time() + seconds
+        func._ttl = seconds
+        original = func.__wrapped__
+
+        def wrapper(*args, **kwargs):
+            if time.time() > func._expiry:
+                func.cache_clear()
+                func._expiry = time.time() + func._ttl
+            return func(*args, **kwargs)
+
+        wrapper.cache_clear = func.cache_clear
+        return wrapper
+    return decorator
 
 
 def _server() -> PlexServer:
@@ -37,8 +58,14 @@ def get_users() -> list[dict]:
     return users
 
 
-def get_libraries() -> list[str]:
+@_timed_lru_cache(seconds=300)
+def get_libraries():
     return [s.title for s in _server().library.sections()]
+
+
+@_timed_lru_cache(seconds=120)
+def _get_system_accounts():
+    return {a.id: a.name for a in _server().systemAccounts()}
 
 
 def get_library_items(library_name: str):
@@ -114,11 +141,8 @@ def get_last_viewed_info(item) -> dict:
             if not viewed_at:
                 viewed_at = getattr(latest, "viewedAt", None)
             if account_id is not None:
-                server = _server()
-                for sa in server.systemAccounts():
-                    if sa.id == account_id:
-                        viewed_by = sa.name
-                        break
+                accounts = _get_system_accounts()
+                viewed_by = accounts.get(account_id)
     except Exception:
         pass
     return {"viewed_at": viewed_at, "viewed_by": viewed_by}
