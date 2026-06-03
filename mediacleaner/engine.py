@@ -458,6 +458,15 @@ def execute_deletions(report: EngineReport):
         session.commit()
         session.close()
 
+    # Trigger Plex library scan to reflect deletions
+    if any(r.action == "delete" for r in report.results):
+        try:
+            for lib_name, _ in plex.get_libraries():
+                plex.scan_library(lib_name)
+            log.info("Triggered Plex library scan")
+        except Exception as e:
+            log.warning(f"Failed to trigger Plex scan: {e}")
+
 
 def _delete_episode(result: EvalResult):
     """Delete an episode file and mark as unmonitored/ignored in the managing app."""

@@ -72,6 +72,11 @@ def get_libraries():
     return [(s.title, s.type) for s in _server().library.sections()]
 
 
+def scan_library(library_name: str):
+    """Trigger a Plex library scan."""
+    _server().library.section(library_name).update()
+
+
 @_timed_lru_cache(seconds=120)
 def _get_system_accounts():
     return {a.id: a.name for a in _server().systemAccounts()}
