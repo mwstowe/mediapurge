@@ -464,7 +464,7 @@ def _send_confirmation_email(rule: Rule, title: str, token: str):
     """Send confirmation email based on the rule's confirm_method."""
     from mediacleaner.config import get_config
     cfg = get_config()
-    base_url = f"http://localhost:{cfg['web'].get('port', 9393)}"
+    base_url = cfg["web"].get("base_url", f"https://localhost:{cfg['web'].get('port', 9393)}")
 
     method = rule.confirm_method or "url_click"
     if method == "url_click":

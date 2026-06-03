@@ -25,6 +25,7 @@ ombi:
 web:
   secret_key: "CHANGE_ME_RANDOM_SECRET"
   admin_password: ""  # bcrypt hash; generate with: python -c "import bcrypt; print(bcrypt.hashpw(b'yourpass', bcrypt.gensalt()).decode())"
+  base_url: "https://mediacleaner.stowe.network:9393"
   port: 9393
   ssl_cert: /opt/mediacleaner/ssl/fullchain.pem
   ssl_key: /opt/mediacleaner/ssl/privkey.pem
