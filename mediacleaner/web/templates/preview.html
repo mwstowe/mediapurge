@@ -74,9 +74,13 @@
 {% if pending %}
 <h2>Pending Confirmation ({{ pending | length }})</h2>
 <table>
-  <tr><th>Title</th><th>Reason</th></tr>
+  <tr><th>Title</th><th>Reason</th><th>Notified</th></tr>
   {% for r in pending %}
-  <tr><td>{{ r.title }}</td><td>{{ r.reason }}</td></tr>
+  <tr>
+    <td>{{ r.title }}</td>
+    <td>{{ r.reason }}</td>
+    <td>{% if r.notified_at %}<span style="color:#4caf50;">✓ {{ r.notified_at }}</span>{% else %}<span style="color:#aaa;">not yet</span>{% endif %}</td>
+  </tr>
   {% endfor %}
 </table>
 {% endif %}

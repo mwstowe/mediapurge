@@ -25,6 +25,7 @@ class EvalResult:
     reason: str = ""
     manager: str = "none"
     manager_id: int | None = None
+    notified_at: str | None = None
 
 
 @dataclass
@@ -444,6 +445,22 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
 
     session.commit()
     session.close()
+
+    # Enrich pending_confirm results with notification status
+    pa_session = get_session()
+    for result in report.results:
+        if result.action == "pending_confirm":
+            pa = pa_session.execute(
+                select(PendingAction).where(
+                    PendingAction.plex_rating_key == result.rating_key,
+                    PendingAction.confirmed == False,
+                    PendingAction.cancelled == False,
+                )
+            ).scalar_one_or_none()
+            if pa:
+                result.notified_at = pa.notified_at.strftime("%Y-%m-%d %H:%M")
+    pa_session.close()
+
     return report
 
 
