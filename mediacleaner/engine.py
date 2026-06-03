@@ -157,8 +157,8 @@ def evaluate_item(item, rule: Rule) -> tuple[str, str]:
         return "keep", "rule action is keep"
 
     # Check if rule is snoozed
-    if rule.snoozed_until and datetime.now(timezone.utc) < rule.snoozed_until:
-        days_left = (rule.snoozed_until - datetime.now(timezone.utc)).days
+    if rule.snoozed_until and datetime.now(timezone.utc) < rule.snoozed_until.replace(tzinfo=timezone.utc):
+        days_left = (rule.snoozed_until.replace(tzinfo=timezone.utc) - datetime.now(timezone.utc)).days
         return "keep", f"snoozed for {days_left} more days"
 
     # Check on-deck protection
@@ -199,8 +199,8 @@ def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
         return [(show, "keep", "rule action is keep")]
 
     # Check if rule is snoozed
-    if rule.snoozed_until and datetime.now(timezone.utc) < rule.snoozed_until:
-        days_left = (rule.snoozed_until - datetime.now(timezone.utc)).days
+    if rule.snoozed_until and datetime.now(timezone.utc) < rule.snoozed_until.replace(tzinfo=timezone.utc):
+        days_left = (rule.snoozed_until.replace(tzinfo=timezone.utc) - datetime.now(timezone.utc)).days
         return [(show, "keep", f"snoozed for {days_left} more days")]
 
     # Check all_watched condition — all episodes must be watched before any action
