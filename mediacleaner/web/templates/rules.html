@@ -5,15 +5,31 @@
 <a href="{{ url_for('rules_new') }}" class="btn btn-primary">+ New Rule</a>
 
 <table>
-  <tr><th>Scope</th><th>Target</th><th>Action</th><th>Watched By</th><th>Min Days</th><th>Episodes</th><th>Enabled</th><th></th></tr>
+  <tr><th>Scope</th><th>Target</th><th>Action</th><th>Conditions</th><th>Confirmation</th><th>Enabled</th><th></th></tr>
   {% for rule in rules %}
   <tr>
     <td>{{ rule.scope }}</td>
     <td>{{ rule.media_title or rule.plex_library or "—" }}</td>
     <td><span class="tag-{{ rule.action }}">{{ rule.action }}</span></td>
-    <td>{{ rule.watched_by }}</td>
-    <td>{{ rule.min_days_watched }}</td>
-    <td>{{ rule.min_episodes }}</td>
+    <td style="font-size:0.85rem;color:#aaa;">
+      {% if rule.action == "delete" %}
+        watched by {{ rule.watched_by }}
+        {% if rule.all_watched %}· all eps{% endif %}
+        {% if rule.min_days_watched %}· after {{ rule.min_days_watched }}d{% endif %}
+        {% if rule.max_days_inactive %}· inactive {{ rule.max_days_inactive }}d{% endif %}
+        {% if rule.min_episodes %}· keep {{ rule.min_episodes }} eps{% endif %}
+        {% if rule.protect_on_deck %}· on-deck safe{% endif %}
+      {% else %}
+        —
+      {% endif %}
+    </td>
+    <td style="font-size:0.85rem;">
+      {% if rule.confirm_before_delete and rule.action == "delete" %}
+        <span style="color:#4fc3f7;">{{ rule.confirm_method or "url_click" }}</span> · {{ rule.confirm_days }}d wait
+      {% else %}
+        {% if rule.action == "delete" %}<span style="color:#f44;">immediate</span>{% else %}—{% endif %}
+      {% endif %}
+    </td>
     <td>{{ "✓" if rule.enabled else "✗" }}</td>
     <td>
       <a href="{{ url_for('rules_edit', rule_id=rule.id) }}" class="btn btn-primary btn-sm">Edit</a>
