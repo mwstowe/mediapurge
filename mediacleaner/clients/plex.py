@@ -173,16 +173,24 @@ def days_since_watched(last_viewed_at: datetime | None) -> int | None:
 
 @_timed_lru_cache(seconds=300)
 def _get_recent_history():
-    """Fetch recent watch history for the whole server in one call."""
+    """Fetch recent watch history for the whole server in one call.
+    Indexes by episode key AND show key so both levels can look up."""
     history = {}
     accounts = _get_system_accounts()
     for h in _server().history(maxresults=5000):
+        entry = {
+            "viewed_at": getattr(h, "viewedAt", None),
+            "viewed_by": accounts.get(getattr(h, "accountID", None)),
+        }
         key = str(h.ratingKey)
         if key not in history:
-            history[key] = {
-                "viewed_at": getattr(h, "viewedAt", None),
-                "viewed_by": accounts.get(getattr(h, "accountID", None)),
-            }
+            history[key] = entry
+        # Also index by show (grandparent) key for browse-level lookups
+        gp_key_path = getattr(h, "grandparentKey", None)
+        if gp_key_path:
+            gp_key = gp_key_path.rsplit("/", 1)[-1]
+            if gp_key not in history:
+                history[gp_key] = entry
     return history
 
 
