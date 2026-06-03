@@ -36,3 +36,16 @@ def delete_show(show_slug: str, remove_files: bool = True):
         verify=False,
     )
     r.raise_for_status()
+
+
+def ignore_episode(show_slug: str, season: int, episode: int):
+    """Mark an episode as Ignored and delete its file."""
+    url, headers = _base()
+    ep_id = f"s{season:02d}e{episode:02d}"
+    r = requests.patch(
+        f"{url}/api/v2/series/{show_slug}/episodes/{ep_id}",
+        headers=headers,
+        json={"status": "Ignored"},
+        verify=False,
+    )
+    r.raise_for_status()

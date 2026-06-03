@@ -23,6 +23,7 @@ def get_episode_files(series_id: int) -> list[dict]:
 
 
 def delete_episode_file(episode_file_id: int):
+    """Delete the file — Sonarr automatically unmonitors the episode."""
     url, headers = _base()
     r = requests.delete(f"{url}/api/v3/episodefile/{episode_file_id}", headers=headers)
     r.raise_for_status()

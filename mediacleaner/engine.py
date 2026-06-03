@@ -417,8 +417,12 @@ def execute_deletions(report: EngineReport):
             continue
 
         try:
-            if result.manager == "sonarr":
-                _delete_via_sonarr(result)
+            is_episode = " - S" in result.title
+            if is_episode:
+                _delete_episode(result)
+            elif result.manager == "sonarr":
+                sonarr.delete_series(int(result.manager_id), delete_files=True)
+                ombi.cleanup_for_title(result.title)
             elif result.manager == "radarr":
                 radarr.delete_movie(int(result.manager_id), delete_files=True)
                 ombi.cleanup_for_title(result.title)
@@ -429,7 +433,7 @@ def execute_deletions(report: EngineReport):
             log.info(f"Deleted: {result.title} via {result.manager}")
 
             # If this was a whole-show/movie deletion (not episode-level), retire the rule
-            if result.rule_id and " - S" not in result.title:
+            if result.rule_id and not is_episode:
                 rules_to_delete.add(result.rule_id)
 
         except Exception as e:
@@ -448,13 +452,17 @@ def execute_deletions(report: EngineReport):
         session.close()
 
 
-def _delete_via_sonarr(result: EvalResult):
-    """Delete via Sonarr — either a whole series or a single episode file."""
-    # If title contains S##E## pattern, it's an episode deletion
-    if " - S" in result.title and "E" in result.title:
-        # Find the episode file by matching the Plex file path
-        ep_files = sonarr.get_episode_files(result.manager_id)
-        # Get the plex file path for this episode
+def _delete_episode(result: EvalResult):
+    """Delete an episode file and mark as unmonitored/ignored in the managing app."""
+    # Parse season/episode from title format "Show - S01E05"
+    import re
+    match = re.search(r"S(\d+)E(\d+)", result.title)
+    season = int(match.group(1)) if match else None
+    episode = int(match.group(2)) if match else None
+
+    if result.manager == "sonarr":
+        # Find and delete the episode file via Sonarr
+        ep_files = sonarr.get_episode_files(int(result.manager_id))
         server = plex._server()
         try:
             plex_item = server.fetchItem(int(result.rating_key))
@@ -466,11 +474,23 @@ def _delete_via_sonarr(result: EvalResult):
             if ef.get("path") and ef["path"] in ep_paths:
                 sonarr.delete_episode_file(ef["id"])
                 return
-        # Fallback: couldn't match file, log warning
         log.warning(f"Could not match episode file for {result.title}")
-    else:
-        sonarr.delete_series(result.manager_id, delete_files=True)
-        ombi.cleanup_for_title(result.title)
+
+    elif result.manager == "medusa":
+        # Mark as ignored in Medusa + delete file from disk
+        if season is not None and episode is not None:
+            medusa.ignore_episode(str(result.manager_id), season, episode)
+        # Delete the actual file
+        server = plex._server()
+        try:
+            plex_item = server.fetchItem(int(result.rating_key))
+            for path in plex.get_file_paths(plex_item):
+                import os
+                if os.path.exists(path):
+                    os.remove(path)
+                    log.info(f"Removed file: {path}")
+        except Exception as e:
+            log.warning(f"Could not remove file for {result.title}: {e}")
 
 
 # --- Confirmation workflow ---
