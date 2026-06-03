@@ -7,6 +7,15 @@ from plexapi.server import PlexServer
 from mediacleaner.config import get_config
 
 
+def _to_utc(dt: datetime | None) -> datetime | None:
+    """Normalize a datetime to UTC-aware."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def _timed_lru_cache(seconds=300, maxsize=128):
     """LRU cache with TTL expiry."""
     def decorator(func):
@@ -165,10 +174,7 @@ def get_file_paths(item) -> list[str]:
 def days_since_watched(last_viewed_at: datetime | None) -> int | None:
     if last_viewed_at is None:
         return None
-    now = datetime.now(timezone.utc)
-    if last_viewed_at.tzinfo is None:
-        last_viewed_at = last_viewed_at.replace(tzinfo=timezone.utc)
-    return (now - last_viewed_at).days
+    return (datetime.now(timezone.utc) - _to_utc(last_viewed_at)).days
 
 
 @_timed_lru_cache(seconds=300)
@@ -211,20 +217,16 @@ def days_since_last_activity(show) -> int | None:
     for ep in show.episodes():
         viewed = getattr(ep, "lastViewedAt", None)
         if viewed is not None:
+            viewed = _to_utc(viewed)
             if latest is None or viewed > latest:
                 latest = viewed
     if latest is None:
         return None
-    if latest.tzinfo is None:
-        latest = latest.replace(tzinfo=timezone.utc)
     return (datetime.now(timezone.utc) - latest).days
 
 
 def days_since_added(item) -> int:
-    added = item.addedAt
-    if added.tzinfo is None:
-        added = added.replace(tzinfo=timezone.utc)
-    return (datetime.now(timezone.utc) - added).days
+    return (datetime.now(timezone.utc) - _to_utc(item.addedAt)).days
 
 
 def all_episodes_watched_by(show, usernames: list[str]) -> tuple[bool, datetime | None]:
@@ -235,11 +237,12 @@ def all_episodes_watched_by(show, usernames: list[str]) -> tuple[bool, datetime 
         if "any" in usernames:
             if not ep.isWatched:
                 return False, None
-            viewed = getattr(ep, "lastViewedAt", None)
+            viewed = _to_utc(getattr(ep, "lastViewedAt", None))
         else:
             watched, viewed = is_watched_by(ep, usernames)
             if not watched:
                 return False, None
+            viewed = _to_utc(viewed)
         if viewed and (latest_viewed is None or viewed > latest_viewed):
             latest_viewed = viewed
     return True, latest_viewed

@@ -603,7 +603,7 @@ def process_pending_actions():
             continue
 
         # If expired and not cancelled, confirm for deletion
-        if now >= pa.expires_at:
+        if now >= pa.expires_at.replace(tzinfo=timezone.utc):
             pa.confirmed = True
             log.info(f"Confirmation expired, marking for deletion: {pa.media_title}")
             session.add(ActionLog(
@@ -642,11 +642,11 @@ def _user_cancelled_via_plex(pa: PendingAction) -> bool:
         if hasattr(item, "episodes"):
             for ep in item.episodes():
                 viewed = getattr(ep, "lastViewedAt", None)
-                if viewed and viewed.replace(tzinfo=timezone.utc) > pa.notified_at:
+                if viewed and viewed.replace(tzinfo=timezone.utc) > pa.notified_at.replace(tzinfo=timezone.utc):
                     return True
         else:
             viewed = getattr(item, "lastViewedAt", None)
-            if viewed and viewed.replace(tzinfo=timezone.utc) > pa.notified_at:
+            if viewed and viewed.replace(tzinfo=timezone.utc) > pa.notified_at.replace(tzinfo=timezone.utc):
                 return True
 
     elif pa.confirm_method == "mark_unwatched":
