@@ -244,6 +244,13 @@ def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
             for item, action, reason in results
         ]
 
+    # If ALL episodes resolve to delete/pending, collapse to a show-level action
+    actions = {action for _, action, _ in results}
+    if actions <= {"delete", "pending_confirm"} and results:
+        if rule.confirm_before_delete:
+            return [(show, "pending_confirm", "all episodes eligible, awaiting confirmation")]
+        return [(show, "delete_show", "all episodes eligible for deletion")]
+
     return results
 
 
