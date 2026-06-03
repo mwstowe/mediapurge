@@ -68,7 +68,8 @@ def _get_system_accounts():
     return {a.id: a.name for a in _server().systemAccounts()}
 
 
-def get_manager_info() -> dict:
+@_timed_lru_cache(seconds=300)
+def get_manager_info():
     """Build a lookup of file path -> {managers, ended} from Sonarr, Radarr, Medusa."""
     from mediacleaner.clients import sonarr, radarr, medusa
     import warnings
@@ -170,23 +171,30 @@ def days_since_watched(last_viewed_at: datetime | None) -> int | None:
     return (now - last_viewed_at).days
 
 
+@_timed_lru_cache(seconds=300)
+def _get_recent_history():
+    """Fetch recent watch history for the whole server in one call."""
+    history = {}
+    accounts = _get_system_accounts()
+    for h in _server().history(maxresults=5000):
+        key = str(h.ratingKey)
+        if key not in history:
+            history[key] = {
+                "viewed_at": getattr(h, "viewedAt", None),
+                "viewed_by": accounts.get(getattr(h, "accountID", None)),
+            }
+    return history
+
+
 def get_last_viewed_info(item) -> dict:
     """Get last viewed date and which user viewed it for a media item."""
+    history = _get_recent_history()
+    key = str(item.ratingKey)
+    if key in history:
+        return history[key]
+    # Fallback to item's own lastViewedAt (no user info)
     viewed_at = getattr(item, "lastViewedAt", None)
-    viewed_by = None
-    try:
-        history = item.history()
-        if history:
-            latest = history[0]
-            account_id = getattr(latest, "accountID", None)
-            if not viewed_at:
-                viewed_at = getattr(latest, "viewedAt", None)
-            if account_id is not None:
-                accounts = _get_system_accounts()
-                viewed_by = accounts.get(account_id)
-    except Exception:
-        pass
-    return {"viewed_at": viewed_at, "viewed_by": viewed_by}
+    return {"viewed_at": viewed_at, "viewed_by": None}
 
 
 def days_since_last_activity(show) -> int | None:
