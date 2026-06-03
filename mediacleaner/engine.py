@@ -203,22 +203,21 @@ def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
                 return [(show, "delete_show", f"never watched, added {age}d ago (limit {rule.max_days_inactive}d)")]
 
     episodes = show.episodes()
-    # Sort newest first (by season + episode number)
-    episodes.sort(key=lambda e: (e.parentIndex or 0, e.index or 0), reverse=True)
+    # Sort oldest first (by season + episode number)
+    episodes.sort(key=lambda e: (e.parentIndex or 0, e.index or 0))
+
+    # min_episodes: protect the LATEST N episodes from deletion
+    protected_count = rule.min_episodes if rule.min_episodes > 0 else 0
+    deletable = episodes[:len(episodes) - protected_count] if protected_count else episodes
 
     results = []
     users = [u.strip() for u in rule.watched_by.split(",")]
 
-    for i, ep in enumerate(episodes):
-        # Always keep the newest min_episodes
-        if rule.min_episodes > 0 and i < rule.min_episodes:
-            results.append((ep, "keep", f"protected: within latest {rule.min_episodes} episodes"))
-            continue
-
+    # Process in order — stop at the first episode that doesn't qualify
+    for ep in deletable:
         # Check on-deck
         if rule.protect_on_deck and plex.is_on_deck(ep):
-            results.append((ep, "keep", "protected: on deck"))
-            continue
+            break  # stop here, don't skip
 
         # Check watched
         if "any" in users:
@@ -226,7 +225,7 @@ def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
         else:
             watched, last_viewed = plex.is_watched_by(ep, users)
 
-        # Hard age limit
+        # Hard age limit overrides watch requirement
         if rule.max_days_age > 0:
             age = plex.days_since_added(ep)
             if age >= rule.max_days_age:
@@ -234,29 +233,25 @@ def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
                 continue
 
         if not watched:
-            results.append((ep, "keep", "not yet watched"))
-            continue
+            break  # not watched — stop processing
 
         days = plex.days_since_watched(last_viewed)
         if days is None:
-            results.append((ep, "keep", "no last-viewed date"))
-            continue
+            break
         if days < rule.min_days_watched:
-            results.append((ep, "keep", f"watched {days}d ago, need {rule.min_days_watched}d"))
-            continue
+            break  # grace period not met — stop
 
         results.append((ep, "delete", f"watched {days}d ago by {rule.watched_by}"))
 
     # If confirm is set and we have deletes, convert them to pending
-    if rule.confirm_before_delete:
+    if rule.confirm_before_delete and results:
         results = [
             (item, "pending_confirm" if action == "delete" else action, reason)
             for item, action, reason in results
         ]
 
-    # If ALL episodes resolve to delete/pending, collapse to a show-level action
-    actions = {action for _, action, _ in results}
-    if actions <= {"delete", "pending_confirm"} and results:
+    # If ALL deletable episodes qualify, collapse to a show-level action
+    if results and len(results) == len(deletable):
         if rule.confirm_before_delete:
             return [(show, "pending_confirm", "all episodes eligible, awaiting confirmation")]
         return [(show, "delete_show", "all episodes eligible for deletion")]
