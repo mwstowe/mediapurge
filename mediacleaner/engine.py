@@ -442,6 +442,8 @@ def execute_deletions(report: EngineReport):
             elif result.manager == "medusa":
                 medusa.delete_show(str(result.manager_id), remove_files=True)
                 ombi.cleanup_for_title(result.title)
+            elif result.manager == "none":
+                _delete_direct(result)
 
             log.info(f"Deleted: {result.title} via {result.manager}")
 
@@ -472,6 +474,25 @@ def execute_deletions(report: EngineReport):
             log.info("Triggered Plex library scan")
         except Exception as e:
             log.warning(f"Failed to trigger Plex scan: {e}")
+
+
+def _delete_direct(result: EvalResult):
+    """Delete unmanaged media directly from disk."""
+    import os
+    import shutil
+    server = plex._server()
+    try:
+        plex_item = server.fetchItem(int(result.rating_key))
+        paths = plex.get_file_paths(plex_item)
+        for path in paths:
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+                log.info(f"Removed directory: {path}")
+            elif os.path.exists(path):
+                os.remove(path)
+                log.info(f"Removed file: {path}")
+    except Exception as e:
+        log.warning(f"Could not remove files for {result.title}: {e}")
 
 
 def _delete_episode(result: EvalResult):
