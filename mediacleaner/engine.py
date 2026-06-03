@@ -64,7 +64,30 @@ def sync_managed_media():
     session.close()
 
 
+def _is_show_ended(show) -> bool:
+    """Check if a show has ended by querying the managing app."""
+    paths = plex.get_file_paths(show)
+    if not paths:
+        return False
+    path = paths[0]
+    try:
+        for s in sonarr.get_all_series():
+            if path.startswith(s["path"]):
+                return s.get("ended", s.get("status") == "ended")
+    except Exception:
+        pass
+    try:
+        for s in medusa.get_all_shows():
+            show_path = s.get("config", {}).get("location", "")
+            if path.startswith(show_path):
+                return s.get("status", "").lower() == "ended"
+    except Exception:
+        pass
+    return False
+
+
 def find_manager(item) -> tuple[str, int | None]:
+    """Determine which application manages a Plex item by matching file paths."""
     """Determine which application manages a Plex item by matching file paths."""
     paths = plex.get_file_paths(item)
     if not paths:
@@ -250,11 +273,13 @@ def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
             for item, action, reason in results
         ]
 
-    # If ALL deletable episodes qualify, collapse to a show-level action
+    # If ALL deletable episodes qualify AND show has ended, collapse to show-level action
     if results and len(results) == len(deletable):
-        if rule.confirm_before_delete:
-            return [(show, "pending_confirm", "all episodes eligible, awaiting confirmation")]
-        return [(show, "delete_show", "all episodes eligible for deletion")]
+        show_ended = _is_show_ended(show)
+        if show_ended:
+            if rule.confirm_before_delete:
+                return [(show, "pending_confirm", "all episodes eligible, show ended, awaiting confirmation")]
+            return [(show, "delete_show", "all episodes eligible, show ended")]
 
     return results
 
