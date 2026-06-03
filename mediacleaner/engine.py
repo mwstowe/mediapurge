@@ -204,7 +204,8 @@ def evaluate_item(item, rule: Rule) -> tuple[str, str]:
 def _pending_reason(rule: Rule, trigger: str, rating_key: str = None) -> str:
     """Format a pending_confirm reason with deadline and method info."""
     method = rule.confirm_method or "url_click"
-    methods = {"url_click": "click keep link", "start_watching": "start watching", "mark_unwatched": "mark unwatched"}
+    methods = {"url_click": "keeps via link", "start_watching": "starts watching", "mark_unwatched": "marks unwatched"}
+    who = rule.watched_by if rule.watched_by != "any" else "anyone"
 
     # Check if there's already a pending action with a real expiry
     deadline = None
@@ -225,7 +226,7 @@ def _pending_reason(rule: Rule, trigger: str, rating_key: str = None) -> str:
         from datetime import timedelta
         deadline = (datetime.now(timezone.utc) + timedelta(days=rule.confirm_days)).strftime("%Y-%m-%d")
 
-    return f"{trigger} · deletes after {deadline} unless user {methods.get(method, method)}s"
+    return f"{trigger} · deletes after {deadline} unless {who} {methods.get(method, method)}"
 
 
 def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
