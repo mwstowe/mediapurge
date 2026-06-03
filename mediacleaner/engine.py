@@ -201,11 +201,31 @@ def evaluate_item(item, rule: Rule) -> tuple[str, str]:
     return "delete", f"watched {days}d ago by {rule.watched_by}"
 
 
-def _pending_reason(rule: Rule, trigger: str) -> str:
+def _pending_reason(rule: Rule, trigger: str, rating_key: str = None) -> str:
     """Format a pending_confirm reason with deadline and method info."""
     method = rule.confirm_method or "url_click"
     methods = {"url_click": "click keep link", "start_watching": "start watching", "mark_unwatched": "mark unwatched"}
-    return f"{trigger} · deletes in {rule.confirm_days}d unless user {methods.get(method, method)}s"
+
+    # Check if there's already a pending action with a real expiry
+    deadline = None
+    if rating_key:
+        session = get_session()
+        pa = session.execute(
+            select(PendingAction).where(
+                PendingAction.plex_rating_key == rating_key,
+                PendingAction.confirmed == False,
+                PendingAction.cancelled == False,
+            )
+        ).scalar_one_or_none()
+        session.close()
+        if pa:
+            deadline = pa.expires_at.strftime("%Y-%m-%d")
+
+    if not deadline:
+        from datetime import timedelta
+        deadline = (datetime.now(timezone.utc) + timedelta(days=rule.confirm_days)).strftime("%Y-%m-%d")
+
+    return f"{trigger} · deletes after {deadline} unless user {methods.get(method, method)}s"
 
 
 def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
@@ -231,7 +251,7 @@ def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
             return [(show, "keep", f"all watched {days}d ago, need {rule.min_days_watched}d")]
         # Eligible for deletion (whole show)
         if rule.confirm_before_delete:
-            return [(show, "pending_confirm", _pending_reason(rule, f"all watched {days}d ago"))]
+            return [(show, "pending_confirm", _pending_reason(rule, f"all watched {days}d ago", str(show.ratingKey)))]
         return [(show, "delete_show", f"all watched {days}d ago by {rule.watched_by}")]
 
     # Check show-level inactivity timeout (delete entire show)
@@ -239,14 +259,14 @@ def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
         inactive_days = plex.days_since_last_activity(show)
         if inactive_days is not None and inactive_days >= rule.max_days_inactive:
             if rule.confirm_before_delete:
-                return [(show, "pending_confirm", _pending_reason(rule, f"inactive {inactive_days}d"))]
+                return [(show, "pending_confirm", _pending_reason(rule, f"inactive {inactive_days}d", str(show.ratingKey)))]
             return [(show, "delete_show", f"inactive {inactive_days}d (limit {rule.max_days_inactive}d)")]
         # If never watched and added long ago, also consider inactive
         if inactive_days is None:
             age = plex.days_since_added(show)
             if age >= rule.max_days_inactive:
                 if rule.confirm_before_delete:
-                    return [(show, "pending_confirm", _pending_reason(rule, f"never watched, added {age}d ago"))]
+                    return [(show, "pending_confirm", _pending_reason(rule, f"never watched, added {age}d ago", str(show.ratingKey)))]
                 return [(show, "delete_show", f"never watched, added {age}d ago (limit {rule.max_days_inactive}d)")]
 
     episodes = show.episodes()
@@ -302,7 +322,7 @@ def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
         show_ended = _is_show_ended(show)
         if show_ended:
             if rule.confirm_before_delete:
-                return [(show, "pending_confirm", _pending_reason(rule, "all episodes eligible"))]
+                return [(show, "pending_confirm", _pending_reason(rule, "all episodes eligible", str(show.ratingKey)))]
             return [(show, "delete_show", "all episodes eligible, show ended")]
 
     return results
