@@ -198,9 +198,16 @@ def create_app() -> Flask:
     @login_required
     def preview():
         mode = request.args.get("mode")
-        if mode not in ("preview", "run"):
-            return render_template("preview.html", report=None, error=None, ran=False, running=False)
-        if not _task["running"]:
+        # If task is running, show the polling page regardless
+        if _task["running"]:
+            return render_template("preview.html", report=None, error=None, ran=False, running=True)
+        # If task just finished and no new mode requested, show results
+        if _task["report"] is not None and mode is None:
+            report = _task["report"]
+            ran = _task["mode"] == "run"
+            return render_template("preview.html", report=report, error=_task["error"], ran=ran, running=False)
+        # Start a new task
+        if mode in ("preview", "run"):
             _task["running"] = True
             _task["report"] = None
             _task["error"] = None
@@ -208,7 +215,8 @@ def create_app() -> Flask:
             import threading
             dry_run = mode == "preview"
             threading.Thread(target=_run_task, args=(dry_run,), daemon=True).start()
-        return render_template("preview.html", report=None, error=None, ran=False, running=True)
+            return render_template("preview.html", report=None, error=None, ran=False, running=True)
+        return render_template("preview.html", report=None, error=None, ran=False, running=False)
 
     @app.route("/preview/status")
     @login_required
