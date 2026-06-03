@@ -1,6 +1,9 @@
 plex:
   url: http://127.0.0.1:32400
   token: "YOUR_PLEX_TOKEN"
+  user_tokens:
+    epstowe: "USER_PLEX_TOKEN"
+    adelaidestowe: "USER_PLEX_TOKEN"
   user_emails:
     mstowe: mstowe@example.com
     epstowe: evelyn@example.com

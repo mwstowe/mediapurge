@@ -117,9 +117,10 @@ def is_watched_by(item, usernames: list[str]) -> tuple[bool, datetime | None]:
     """Check if item is watched by any of the given users. Returns (watched, last_viewed_at)."""
     cfg = get_config()["plex"]
     server_url = cfg["url"]
+    user_tokens = cfg.get("user_tokens", {})
 
     for username in usernames:
-        token = cfg.get("tokens", {}).get(username, cfg["token"])
+        token = user_tokens.get(username, cfg["token"])
         user_server = PlexServer(server_url, token)
         try:
             user_item = user_server.fetchItem(item.ratingKey)
