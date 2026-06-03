@@ -74,6 +74,9 @@ Copy `config.yaml.example` to `config.yaml` and fill in your values.
 plex:
   url: http://127.0.0.1:32400
   token: "YOUR_PLEX_TOKEN"
+  user_tokens:
+    epstowe: "EPSTOWE_PLEX_TOKEN"
+    adelaidestowe: "ADELAIDE_PLEX_TOKEN"
   user_emails:
     mstowe: mstowe@example.com
     epstowe: evelyn@example.com
@@ -96,6 +99,33 @@ ombi:
 ```
 
 `user_emails` maps Plex usernames to email addresses for confirmation emails. Entries that aren't Plex users are still available as email destinations.
+
+#### User Tokens
+
+`user_tokens` provides per-user Plex tokens so MediaCleaner can check watch status for individual users. Without a token for a user, it falls back to the admin token and sees the admin's watch status — which gives incorrect results.
+
+The admin/server owner (`mstowe` in the example) doesn't need an entry — the main `token` is used for them.
+
+To get a shared user's token:
+
+1. Log in to Plex Web as that user (or use their managed account)
+2. Open any media item, then open the XML view by adding `?X-Plex-Token=` to a Plex URL
+3. Or use this command, replacing the username/password:
+   ```bash
+   curl -s 'https://plex.tv/users/sign_in.json' \
+     -X POST \
+     -H 'X-Plex-Client-Identifier: mediacleaner' \
+     -d 'user[login]=USERNAME&user[password]=PASSWORD' | python3 -c "import sys,json;print(json.load(sys.stdin)['user']['authToken'])"
+   ```
+4. For managed (home) users without their own Plex account, get the token from your admin account:
+   ```bash
+   python3 -c "
+   from plexapi.server import PlexServer
+   s = PlexServer('http://127.0.0.1:32400', 'YOUR_ADMIN_TOKEN')
+   for u in s.myPlexAccount().users():
+       print(f'{u.username or u.title}: {u.get_token(s.machineIdentifier)}')
+   "
+   ```
 
 ### Web UI
 
