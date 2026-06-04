@@ -44,20 +44,28 @@ def cleanup_for_title(title: str):
             delete_tv_request(req["id"])
 
 
-def approve_managed_requests(managed_titles: set[str]):
-    """Mark Ombi requests as available when already managed by an arr (skips Sonarr forwarding)."""
+def approve_managed_requests(plex_titles: set[str]):
+    """Mark Ombi requests as available when media exists in Plex (confirmed on disk)."""
     url, headers = _base()
     approved = []
 
+    def _title_in_plex(ombi_title: str) -> bool:
+        t = ombi_title.lower()
+        # Exact match or Plex has the base title (handles "The Terror: Devil in Silver" vs "The Terror")
+        for pt in plex_titles:
+            if t == pt or t.startswith(pt + ":") or t.startswith(pt + " -"):
+                return True
+        return False
+
     for req in get_movie_requests():
-        if not req.get("available") and req.get("title", "").lower() in managed_titles:
+        if not req.get("available") and _title_in_plex(req.get("title", "")):
             r = requests.post(f"{url}/api/v1/Request/movie/available", headers=headers, json={"id": req["id"]})
             if r.status_code == 200:
                 approved.append(req["title"])
 
     for req in get_tv_requests():
         for child in req.get("childRequests", []):
-            if not child.get("available") and req.get("title", "").lower() in managed_titles:
+            if not child.get("available") and _title_in_plex(req.get("title", "")):
                 r = requests.post(f"{url}/api/v1/Request/tv/available", headers=headers, json={"id": child["id"]})
                 if r.status_code == 200:
                     approved.append(req["title"])

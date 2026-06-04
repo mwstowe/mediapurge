@@ -64,12 +64,13 @@ def sync_managed_media():
     session.commit()
     session.close()
 
-    # Auto-approve Ombi requests for already-managed media
+    # Auto-approve Ombi requests for media that exists in Plex
     try:
-        s2 = get_session()
-        managed_titles = {m.title.lower() for m in s2.query(ManagedMedia).all()}
-        s2.close()
-        approved = ombi.approve_managed_requests(managed_titles)
+        plex_titles = set()
+        for lib_name, _ in plex.get_libraries():
+            for item in plex.get_library_items(lib_name):
+                plex_titles.add(item.title.lower())
+        approved = ombi.approve_managed_requests(plex_titles)
         if approved:
             log.info(f"Auto-approved Ombi requests: {approved}")
     except Exception as e:
