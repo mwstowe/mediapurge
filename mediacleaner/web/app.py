@@ -275,7 +275,7 @@ def create_app() -> Flask:
         mgr_info = plex_client.get_manager_info()
         items_data = []
         for i in items:
-            info = plex_client.get_last_viewed_info(i)
+            viewed_at = getattr(i, "lastViewedAt", None)
             paths = plex_client.get_file_paths(i)
             mgr = None
             for p in paths:
@@ -285,8 +285,7 @@ def create_app() -> Flask:
             items_data.append({
                 "title": i.title, "rating_key": i.ratingKey, "type": i.type,
                 "year": getattr(i, "year", ""), "thumb": i.thumb,
-                "viewed_at": info["viewed_at"].strftime("%Y-%m-%d") if info["viewed_at"] else "Never",
-                "viewed_by": info["viewed_by"] or "—",
+                "viewed_at": viewed_at.strftime("%Y-%m-%d") if viewed_at else "Never",
                 "managers": ", ".join(mgr["managers"]) if mgr else "—",
                 "ended": mgr["ended"] if mgr else None,
             })

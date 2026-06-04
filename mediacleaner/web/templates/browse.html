@@ -20,7 +20,7 @@
 <h2>{{ library }}</h2>
 <p><a href="{{ url_for('browse') }}">← Back to libraries</a></p>
 <table>
-  <tr><th></th><th>Title</th><th>Year</th><th>Managed By</th><th>Status</th><th>Last Activity</th><th>By</th><th></th></tr>
+  <tr><th></th><th>Title</th><th>Year</th><th>Managed By</th><th>Status</th><th>Last Activity</th><th></th></tr>
   {% for item in items %}
   <tr>
     <td><img src="{{ url_for('plex_thumb', path=item.thumb) }}" style="height:40px;border-radius:4px;" alt="" loading="lazy"></td>
@@ -35,7 +35,6 @@
     <td>{{ item.managers }}</td>
     <td>{% if item.ended == true %}Ended{% elif item.ended == false %}Continuing{% else %}—{% endif %}</td>
     <td>{{ item.viewed_at }}</td>
-    <td>{{ item.viewed_by }}</td>
     <td>
       {% if item.type == "show" %}
         <a href="{{ url_for('rules_new') }}?scope=show&plex_rating_key={{ item.rating_key }}&media_title={{ item.title }}&type=show" class="btn btn-sm btn-primary">+ Show Rule</a>
