@@ -264,7 +264,13 @@ def create_app() -> Flask:
         """List Plex libraries."""
         from mediacleaner.clients import plex as plex_client
         libraries = plex_client.get_libraries()
-        return render_template("browse.html", libraries=libraries, items=None, item=None, children=None)
+        db = get_session()
+        lib_rules_map = {}
+        for r in db.query(Rule).filter(Rule.scope == "library", Rule.enabled == True).all():
+            lib_rules_map.setdefault(r.plex_library, []).append(r)
+        db.close()
+        return render_template("browse.html", libraries=libraries, items=None, item=None, children=None,
+                               lib_rules_map=lib_rules_map)
 
     @app.route("/browse/<library>")
     @login_required

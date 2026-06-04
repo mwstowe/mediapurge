@@ -10,7 +10,12 @@
   <li style="margin:0.5rem 0;font-size:1.1rem;">
     {% if type == "show" %}📺{% elif type == "movie" %}🎬{% else %}📁{% endif %}
     <a href="{{ url_for('browse_library', library=name) }}">{{ name }}</a>
-    — <a href="{{ url_for('rules_new') }}?scope=library&plex_library={{ name }}" class="btn btn-sm btn-primary">+ Library Rule</a>
+    {% if lib_rules_map and name in lib_rules_map %}
+      {% for r in lib_rules_map[name] %}
+        — <a href="{{ url_for('rules_edit', rule_id=r.id) }}" class="btn btn-sm btn-primary">✎ {{ r.action }} ({{ r.watched_by }})</a>
+      {% endfor %}
+    {% endif %}
+    — <a href="{{ url_for('rules_new') }}?scope=library&plex_library={{ name }}" class="btn btn-sm btn-primary" style="opacity:0.6;">+</a>
   </li>
 {% endfor %}
 </ul>
