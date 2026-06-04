@@ -199,19 +199,17 @@ def evaluate_item(item, rule: Rule) -> tuple[str, str]:
 
     # Check max_days_inactive (no activity for X days)
     if rule.max_days_inactive > 0:
-        last_viewed_at = getattr(item, "lastViewedAt", None)
-        if last_viewed_at:
-            inactive = plex.days_since_watched(last_viewed_at)
-            if inactive is not None and inactive >= rule.max_days_inactive:
+        last_viewed_at = plex._to_utc(getattr(item, "lastViewedAt", None))
+        added_at = plex._to_utc(item.addedAt)
+        # Use the more recent of last watched or added (handles re-added media)
+        last_activity = max(filter(None, [last_viewed_at, added_at]), default=None)
+        if last_activity:
+            inactive = (datetime.now(timezone.utc) - last_activity).days
+            if inactive >= rule.max_days_inactive:
+                label = f"inactive {inactive}d" if last_viewed_at else f"never watched, added {inactive}d ago"
                 if rule.confirm_before_delete:
-                    return "pending_confirm", _pending_reason(rule, f"inactive {inactive}d", str(item.ratingKey))
-                return "delete", f"inactive {inactive}d (limit {rule.max_days_inactive}d)"
-        else:
-            age = plex.days_since_added(item)
-            if age >= rule.max_days_inactive:
-                if rule.confirm_before_delete:
-                    return "pending_confirm", _pending_reason(rule, f"never watched, added {age}d ago", str(item.ratingKey))
-                return "delete", f"never watched, added {age}d ago (limit {rule.max_days_inactive}d)"
+                    return "pending_confirm", _pending_reason(rule, label, str(item.ratingKey))
+                return "delete", f"{label} (limit {rule.max_days_inactive}d)"
         return "keep", "not yet inactive"
 
     # Must be watched for deletion (unless max_days_age triggered above)
