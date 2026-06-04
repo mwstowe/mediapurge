@@ -91,6 +91,7 @@ def create_app() -> Flask:
                 watched_by=",".join(request.form.getlist("watched_by")) or "any",
                 protect_on_deck="protect_on_deck" in request.form,
                 all_watched="all_watched" in request.form,
+                delete_by_season="delete_by_season" in request.form,
                 confirm_before_delete="confirm_before_delete" in request.form,
                 confirm_days=int(request.form.get("confirm_days", 7)),
                 confirm_method=request.form.get("confirm_method") or None,
@@ -138,6 +139,7 @@ def create_app() -> Flask:
             rule.watched_by = ",".join(request.form.getlist("watched_by")) or "any"
             rule.protect_on_deck = "protect_on_deck" in request.form
             rule.all_watched = "all_watched" in request.form
+            rule.delete_by_season = "delete_by_season" in request.form
             rule.confirm_before_delete = "confirm_before_delete" in request.form
             rule.confirm_days = int(request.form.get("confirm_days", 7))
             rule.confirm_method = request.form.get("confirm_method") or None

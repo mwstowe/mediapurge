@@ -239,6 +239,62 @@ def _pending_reason(rule: Rule, trigger: str, rating_key: str = None) -> str:
     return f"{trigger} · deletes after {deadline} unless {who} {methods.get(method, method)}"
 
 
+def _evaluate_by_season(show, rule: Rule) -> list[tuple]:
+    """Evaluate a show season-by-season. Delete entire seasons where all eps are watched."""
+    users = [u.strip() for u in rule.watched_by.split(",")]
+    seasons = {}
+    for ep in show.episodes():
+        seasons.setdefault(ep.parentIndex, []).append(ep)
+
+    # Sort season numbers descending (newest first) for min_episodes protection
+    sorted_seasons = sorted(seasons.keys(), reverse=True)
+
+    results = []
+    protected = 0
+    for snum in sorted_seasons:
+        eps = seasons[snum]
+
+        # Protect newest N seasons (using min_episodes as min_seasons here)
+        if rule.min_episodes > 0 and protected < rule.min_episodes:
+            results.append((show, "keep", f"S{snum:02d}: protected (newest {rule.min_episodes} seasons)"))
+            protected += 1
+            continue
+
+        # Check if all episodes in this season are watched
+        latest_viewed = None
+        all_watched = True
+        for ep in eps:
+            if "any" in users:
+                if not ep.isWatched:
+                    all_watched = False
+                    break
+                viewed = plex._to_utc(getattr(ep, "lastViewedAt", None))
+            else:
+                watched, viewed = plex.is_watched_by(ep, users)
+                if not watched:
+                    all_watched = False
+                    break
+                viewed = plex._to_utc(viewed)
+            if viewed and (latest_viewed is None or viewed > latest_viewed):
+                latest_viewed = viewed
+
+        if not all_watched:
+            results.append((show, "keep", f"S{snum:02d}: not all episodes watched"))
+            continue
+
+        # Check grace period
+        days = plex.days_since_watched(latest_viewed)
+        if days is not None and days < rule.min_days_watched:
+            results.append((show, "keep", f"S{snum:02d}: watched {days}d ago, need {rule.min_days_watched}d"))
+            continue
+
+        # Season eligible for deletion — return each episode as a delete
+        for ep in eps:
+            results.append((ep, "delete", f"S{snum:02d} fully watched {days}d ago"))
+
+    return results
+
+
 def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
     """Evaluate episodes of a show. Returns list of (item, action, reason).
     May return the show itself as the item if the whole show should be deleted."""
@@ -264,6 +320,10 @@ def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
         if rule.confirm_before_delete:
             return [(show, "pending_confirm", _pending_reason(rule, f"all watched {days}d ago", str(show.ratingKey)))]
         return [(show, "delete_show", f"all watched {days}d ago by {rule.watched_by}")]
+
+    # Check delete_by_season — delete entire seasons where all episodes are watched
+    if rule.delete_by_season:
+        return _evaluate_by_season(show, rule)
 
     # Check show-level inactivity timeout (delete entire show)
     if rule.max_days_inactive > 0:

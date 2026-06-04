@@ -70,6 +70,7 @@
 
     <label><input type="checkbox" name="protect_on_deck" {{ "checked" if not rule or rule.protect_on_deck }}> Protect On Deck</label>
     <label><input type="checkbox" name="all_watched" {{ "checked" if rule and rule.all_watched }}> Require ALL episodes watched (shows)</label>
+    <label><input type="checkbox" name="delete_by_season" {{ "checked" if rule and rule.delete_by_season }}> Delete by season <small>(delete entire seasons when fully watched)</small></label>
 
     <label><input type="checkbox" name="confirm_before_delete" id="confirm_before_delete" {{ "checked" if not rule or rule.confirm_before_delete }}> Confirm before deletion</label>
 
