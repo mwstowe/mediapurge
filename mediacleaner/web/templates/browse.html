@@ -18,9 +18,18 @@
 
 {% if items %}
 <h2>{{ library }}</h2>
-<p><a href="{{ url_for('browse') }}">← Back to libraries</a></p>
+<p>
+  <a href="{{ url_for('browse') }}">← Back to libraries</a>
+  {% if lib_rules %}
+    | Library rules:
+    {% for r in lib_rules %}
+      <a href="{{ url_for('rules_edit', rule_id=r.id) }}" class="btn btn-sm btn-primary">{{ r.action }} ({{ r.watched_by }})</a>
+    {% endfor %}
+  {% endif %}
+  | <a href="{{ url_for('rules_new') }}?scope=library&plex_library={{ library }}" class="btn btn-sm btn-primary">+ Library Rule</a>
+</p>
 <table>
-  <tr><th></th><th>Title</th><th>Year</th><th>Managed By</th><th>Status</th><th>Last Activity</th><th></th></tr>
+  <tr><th></th><th>Title</th><th>Year</th><th>Managed By</th><th>Status</th><th>Last Activity</th><th>Rule</th></tr>
   {% for item in items %}
   <tr>
     <td><img src="{{ url_for('plex_thumb', path=item.thumb) }}" style="height:40px;border-radius:4px;" alt="" loading="lazy"></td>
@@ -36,10 +45,15 @@
     <td>{% if item.ended == true %}Ended{% elif item.ended == false %}Continuing{% else %}—{% endif %}</td>
     <td>{{ item.viewed_at }}</td>
     <td>
-      {% if item.type == "show" %}
-        <a href="{{ url_for('rules_new') }}?scope=show&plex_rating_key={{ item.rating_key }}&media_title={{ item.title }}&type=show" class="btn btn-sm btn-primary">+ Show Rule</a>
+      {% if rules_by_key and item.rating_key | string in rules_by_key %}
+        {% set r = rules_by_key[item.rating_key | string] %}
+        <a href="{{ url_for('rules_edit', rule_id=r.id) }}" class="btn btn-sm btn-primary">✎ {{ r.action }}</a>
       {% else %}
-        <a href="{{ url_for('rules_new') }}?scope=show&plex_rating_key={{ item.rating_key }}&media_title={{ item.title }}&type=movie" class="btn btn-sm btn-primary">+ Rule</a>
+        {% if item.type == "show" %}
+          <a href="{{ url_for('rules_new') }}?scope=show&plex_rating_key={{ item.rating_key }}&media_title={{ item.title }}&type=show" class="btn btn-sm btn-primary" style="opacity:0.6;">+</a>
+        {% else %}
+          <a href="{{ url_for('rules_new') }}?scope=show&plex_rating_key={{ item.rating_key }}&media_title={{ item.title }}&type=movie" class="btn btn-sm btn-primary" style="opacity:0.6;">+</a>
+        {% endif %}
       {% endif %}
     </td>
   </tr>

@@ -289,8 +289,14 @@ def create_app() -> Flask:
                 "managers": ", ".join(mgr["managers"]) if mgr else "—",
                 "ended": mgr["ended"] if mgr else None,
             })
+        # Build lookup of existing rules by rating key
+        db = get_session()
+        rules_by_key = {r.plex_rating_key: r for r in db.query(Rule).filter(Rule.scope == "show", Rule.enabled == True).all()}
+        lib_rules = db.query(Rule).filter(Rule.scope == "library", Rule.plex_library == library, Rule.enabled == True).all()
+        db.close()
         return render_template("browse.html", libraries=None, items=items_data,
-                               library=library, item=None, children=None)
+                               library=library, item=None, children=None,
+                               rules_by_key=rules_by_key, lib_rules=lib_rules)
 
     @app.route("/browse/<library>/<int:rating_key>")
     @login_required
