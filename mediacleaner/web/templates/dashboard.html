@@ -3,8 +3,8 @@
 {% block content %}
 <h1>Dashboard</h1>
 <div class="stats">
-  <div class="stat"><div class="num">{{ rule_count }}</div>Rules</div>
-  <div class="stat"><div class="num">{{ orphan_count }}</div>Orphans</div>
+  <a href="{{ url_for('rules_list') }}" class="stat"><div class="num">{{ rule_count }}</div>Rules</a>
+  <a href="{{ url_for('orphans') }}" class="stat"><div class="num">{{ orphan_count }}</div>Orphans</a>
 </div>
 
 <h2 style="margin-top:2rem;">Recent Actions</h2>
