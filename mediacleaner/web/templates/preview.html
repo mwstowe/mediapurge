@@ -5,8 +5,10 @@
 
 {% if running %}
 <div class="card">
-  <p id="status">⏳ Running... please wait.</p>
+  <p id="status"><span class="spin">⏳</span> Running... please wait.</p>
 </div>
+<style>.spin { display:inline-block; animation: flip 2s ease-in-out infinite; }
+@keyframes flip { 0%,40% { transform:rotate(0deg); } 50%,90% { transform:rotate(180deg); } 100% { transform:rotate(360deg); } }</style>
 <script>
 (function poll() {
   fetch("{{ url_for('preview_status') }}")
