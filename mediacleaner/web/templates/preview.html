@@ -58,13 +58,14 @@
 {% set pending = report.results | selectattr("action", "equalto", "pending_confirm") | list %}
 
 {% if deletions %}
-<h2 style="margin-top:1.5rem;">{{ "Deleted" if ran else "Would Delete" }} ({{ deletions | length }})</h2>
+<h2 style="margin-top:1.5rem;">{{ "Deleted" if ran else "Would Delete" }} ({{ deletions | length }}) — {{ deletions | sum(attribute='file_size') | humansize }}</h2>
 <table>
-  <tr><th>Title</th><th>Manager</th><th>Reason</th></tr>
+  <tr><th>Title</th><th>Manager</th><th>Size</th><th>Reason</th></tr>
   {% for r in deletions %}
   <tr>
     <td>{{ r.title }}</td>
     <td>{{ r.manager }}</td>
+    <td>{{ r.file_size | humansize }}</td>
     <td>{{ r.reason }}</td>
   </tr>
   {% endfor %}

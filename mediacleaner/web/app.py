@@ -20,6 +20,14 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.secret_key = cfg["web"]["secret_key"]
 
+    @app.template_filter("humansize")
+    def humansize(value):
+        for unit in ("B", "KB", "MB", "GB", "TB"):
+            if abs(value) < 1024:
+                return f"{value:.1f} {unit}"
+            value /= 1024
+        return f"{value:.1f} PB"
+
     def login_required(f):
         @functools.wraps(f)
         def wrapped(*args, **kwargs):

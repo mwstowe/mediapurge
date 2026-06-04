@@ -26,6 +26,7 @@ class EvalResult:
     manager: str = "none"
     manager_id: int | None = None
     notified_at: str | None = None
+    file_size: int = 0  # bytes
 
 
 @dataclass
@@ -468,6 +469,16 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
             if pa:
                 result.notified_at = pa.notified_at.strftime("%Y-%m-%d %H:%M")
     pa_session.close()
+
+    # Enrich results with file sizes
+    server = plex._server()
+    for result in report.results:
+        if result.action in ("delete", "pending_confirm") and result.rating_key:
+            try:
+                item = server.fetchItem(int(result.rating_key))
+                result.file_size = plex.get_file_size(item)
+            except Exception:
+                pass
 
     return report
 

@@ -176,6 +176,27 @@ def get_file_paths(item) -> list[str]:
     return paths
 
 
+def get_file_size(item) -> int:
+    """Return total file size in bytes for a media item."""
+    total = 0
+    for media in getattr(item, "media", []):
+        for part in media.parts:
+            total += getattr(part, "size", 0) or 0
+    if not total:
+        import os
+        for path in get_file_paths(item):
+            try:
+                if os.path.isdir(path):
+                    for root, _, files in os.walk(path):
+                        for f in files:
+                            total += os.path.getsize(os.path.join(root, f))
+                elif os.path.exists(path):
+                    total += os.path.getsize(path)
+            except OSError:
+                pass
+    return total
+
+
 def days_since_watched(last_viewed_at: datetime | None) -> int | None:
     if last_viewed_at is None:
         return None
