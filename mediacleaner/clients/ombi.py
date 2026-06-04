@@ -44,28 +44,30 @@ def cleanup_for_title(title: str):
             delete_tv_request(req["id"])
 
 
-def approve_managed_requests(plex_titles: set[str]):
-    """Mark Ombi requests as available when media exists in Plex (confirmed on disk)."""
+def approve_managed_requests(plex_ids: dict):
+    """Mark Ombi requests as available when media exists in Plex, matched by TVDB/IMDB/TMDB IDs.
+    plex_ids should be: {"tvdb": set(), "imdb": set(), "tmdb": set()}
+    """
     url, headers = _base()
     approved = []
 
-    def _title_in_plex(ombi_title: str) -> bool:
-        t = ombi_title.lower()
-        # Exact match or Plex has the base title (handles "The Terror: Devil in Silver" vs "The Terror")
-        for pt in plex_titles:
-            if t == pt or t.startswith(pt + ":") or t.startswith(pt + " -"):
-                return True
-        return False
-
     for req in get_movie_requests():
-        if not req.get("available") and _title_in_plex(req.get("title", "")):
+        if req.get("available"):
+            continue
+        imdb = req.get("imdbId", "")
+        tmdb = req.get("theMovieDbId")
+        if (imdb and imdb in plex_ids["imdb"]) or (tmdb and tmdb in plex_ids["tmdb"]):
             r = requests.post(f"{url}/api/v1/Request/movie/available", headers=headers, json={"id": req["id"]})
             if r.status_code == 200:
                 approved.append(req["title"])
 
     for req in get_tv_requests():
+        tvdb = req.get("tvDbId")
+        imdb = req.get("imdbId", "")
+        if not ((tvdb and tvdb in plex_ids["tvdb"]) or (imdb and imdb in plex_ids["imdb"])):
+            continue
         for child in req.get("childRequests", []):
-            if not child.get("available") and _title_in_plex(req.get("title", "")):
+            if not child.get("available"):
                 r = requests.post(f"{url}/api/v1/Request/tv/available", headers=headers, json={"id": child["id"]})
                 if r.status_code == 200:
                     approved.append(req["title"])

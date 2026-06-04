@@ -66,11 +66,18 @@ def sync_managed_media():
 
     # Auto-approve Ombi requests for media that exists in Plex
     try:
-        plex_titles = set()
+        plex_ids = {"tvdb": set(), "imdb": set(), "tmdb": set()}
         for lib_name, _ in plex.get_libraries():
             for item in plex.get_library_items(lib_name):
-                plex_titles.add(item.title.lower())
-        approved = ombi.approve_managed_requests(plex_titles)
+                for guid in getattr(item, "guids", []):
+                    gid = guid.id  # e.g. "tvdb://322191"
+                    if gid.startswith("tvdb://"):
+                        plex_ids["tvdb"].add(int(gid[7:]))
+                    elif gid.startswith("imdb://"):
+                        plex_ids["imdb"].add(gid[7:])
+                    elif gid.startswith("tmdb://"):
+                        plex_ids["tmdb"].add(int(gid[7:]))
+        approved = ombi.approve_managed_requests(plex_ids)
         if approved:
             log.info(f"Auto-approved Ombi requests: {approved}")
     except Exception as e:
