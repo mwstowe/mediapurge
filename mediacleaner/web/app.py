@@ -324,26 +324,53 @@ def create_app() -> Flask:
     @app.route("/config", methods=["GET", "POST"])
     @login_required
     def config_edit():
-        import yaml
+        import yaml, re
         from mediacleaner.config import get_config, load_config
         config_path = os.environ.get("MEDIACLEANER_CONFIG", "config.yaml")
+        MASK = "••••••••"
+        SENSITIVE_KEYS = ("smtp_pass", "admin_password", "secret_key", "api_key", "token")
+
+        def _mask_yaml(text):
+            """Mask sensitive values for display."""
+            def replacer(m):
+                return f"{m.group(1)}{MASK}"
+            for key in SENSITIVE_KEYS:
+                text = re.sub(rf"({key}:\s*).+", replacer, text)
+            return text
+
+        def _restore_secrets(new_text, old_text):
+            """Restore masked values from the original file."""
+            old_cfg = yaml.safe_load(old_text) or {}
+            new_cfg = yaml.safe_load(new_text) or {}
+            _restore_nested(new_cfg, old_cfg)
+            return new_cfg
+
+        def _restore_nested(new, old, path=""):
+            if isinstance(new, dict) and isinstance(old, dict):
+                for k, v in new.items():
+                    if isinstance(v, dict):
+                        _restore_nested(v, old.get(k, {}))
+                    elif v == MASK and k in old:
+                        new[k] = old[k]
+
         if request.method == "POST":
             try:
-                new_cfg = yaml.safe_load(request.form["config_yaml"])
+                with open(config_path) as f:
+                    old_text = f.read()
+                new_cfg = _restore_secrets(request.form["config_yaml"], old_text)
                 if not isinstance(new_cfg, dict):
                     raise ValueError("Config must be a YAML mapping")
                 with open(config_path, "w") as f:
                     yaml.dump(new_cfg, f, default_flow_style=False, sort_keys=False)
-                # Reload config in memory
                 load_config(config_path)
-                return render_template("config.html", config_yaml=request.form["config_yaml"],
+                return render_template("config.html", config_yaml=_mask_yaml(request.form["config_yaml"]),
                                        success="Configuration saved. Restart service for some changes to take effect.")
             except Exception as e:
                 return render_template("config.html", config_yaml=request.form["config_yaml"],
                                        error=f"Invalid config: {e}")
         with open(config_path) as f:
             config_yaml = f.read()
-        return render_template("config.html", config_yaml=config_yaml)
+        return render_template("config.html", config_yaml=_mask_yaml(config_yaml))
 
     @app.route("/config/password", methods=["POST"])
     @login_required
