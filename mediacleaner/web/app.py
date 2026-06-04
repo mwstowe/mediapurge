@@ -110,7 +110,7 @@ def create_app() -> Flask:
                 server = plex_client._server()
                 item = server.fetchItem(int(rating_key))
                 breadcrumb = {"title": item.title, "thumb": item.thumb,
-                              "year": getattr(item, "year", "")}
+                              "year": getattr(item, "year", ""), "type": item.type}
             except Exception:
                 pass
         # Get Plex users for dropdowns

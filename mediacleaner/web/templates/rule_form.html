@@ -51,6 +51,8 @@
     </select>
   </fieldset>
 
+  <input type="hidden" id="media_type" value="{{ breadcrumb.type if breadcrumb else request.args.get('type', '') }}">
+
   <!-- SECTION: When to delete (only shown for delete action) -->
   <div id="f-delete-opts">
   <fieldset style="border:1px solid #333;padding:1rem;border-radius:6px;margin-bottom:1rem;">
@@ -80,8 +82,8 @@
     <input type="number" name="max_days_age" id="max_days_age" value="{{ rule.max_days_age if rule else 0 }}" style="max-width:100px;">
   </fieldset>
 
-  <fieldset style="border:1px solid #333;padding:1rem;border-radius:6px;margin-bottom:1rem;">
-    <legend style="color:#4fc3f7;font-weight:bold;">Episode Handling <small>(shows only)</small></legend>
+  <fieldset id="f-episode-opts" style="border:1px solid #333;padding:1rem;border-radius:6px;margin-bottom:1rem;">
+    <legend style="color:#4fc3f7;font-weight:bold;">Episode Handling</legend>
 
     <label for="min_episodes" id="lbl-min-episodes">Always keep the latest <small>(0 = no minimum)</small></label>
     <input type="number" name="min_episodes" id="min_episodes" value="{{ rule.min_episodes if rule else 0 }}" style="max-width:100px;">
@@ -134,11 +136,15 @@ function updateVisibility() {
   var scope = document.getElementById('scope').value;
   var confirm = document.getElementById('confirm_before_delete').checked;
   var bySeason = document.getElementById('delete_by_season').checked;
+  var mediaType = document.getElementById('media_type').value;
+  var isMovie = mediaType === 'movie' || scope === 'episode';
+  var isShow = !isMovie && scope !== 'episode';
 
   document.getElementById('f-delete-opts').style.display = action === 'delete' ? '' : 'none';
   document.getElementById('f-confirm-opts').style.display = (action === 'delete' && confirm) ? '' : 'none';
   document.getElementById('f-library').style.display = scope === 'library' ? '' : 'none';
   document.getElementById('f-ratingkey').style.display = scope !== 'library' ? '' : 'none';
+  document.getElementById('f-episode-opts').style.display = (action === 'delete' && isShow) ? '' : 'none';
   document.getElementById('lbl-min-episodes').innerHTML = bySeason
     ? 'Always keep the latest N <strong>seasons</strong> <small>(0 = no minimum)</small>'
     : 'Always keep the latest N <strong>episodes</strong> <small>(0 = no minimum)</small>';

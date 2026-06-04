@@ -38,9 +38,9 @@
     <td>{{ item.viewed_by }}</td>
     <td>
       {% if item.type == "show" %}
-        <a href="{{ url_for('rules_new') }}?scope=show&plex_rating_key={{ item.rating_key }}&media_title={{ item.title }}" class="btn btn-sm btn-primary">+ Show Rule</a>
+        <a href="{{ url_for('rules_new') }}?scope=show&plex_rating_key={{ item.rating_key }}&media_title={{ item.title }}&type=show" class="btn btn-sm btn-primary">+ Show Rule</a>
       {% else %}
-        <a href="{{ url_for('rules_new') }}?scope=show&plex_rating_key={{ item.rating_key }}&media_title={{ item.title }}" class="btn btn-sm btn-primary">+ Rule</a>
+        <a href="{{ url_for('rules_new') }}?scope=show&plex_rating_key={{ item.rating_key }}&media_title={{ item.title }}&type=movie" class="btn btn-sm btn-primary">+ Rule</a>
       {% endif %}
     </td>
   </tr>
