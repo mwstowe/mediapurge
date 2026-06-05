@@ -121,8 +121,9 @@ def find_manager(item) -> tuple[str, int | None]:
     for m in managed:
         if not m.file_path:
             continue
+        mpath = m.file_path.rstrip("/")
         for p in paths:
-            if p.startswith(m.file_path):
+            if p.rstrip("/") == mpath or p.startswith(mpath + "/"):
                 matches.append((m.manager, m.manager_id))
                 break
 
