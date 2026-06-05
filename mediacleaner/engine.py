@@ -525,6 +525,8 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
                             action_taken="delete", dry_run=dry_run,
                             details=json.dumps({"reason": reason, "manager": manager}),
                         ))
+                    elif action == "pending_confirm":
+                        _handle_pending_confirm(session, r, key, title, dry_run)
                     break  # first triggering rule wins
 
     session.commit()
