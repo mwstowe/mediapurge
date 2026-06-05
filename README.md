@@ -75,11 +75,11 @@ plex:
   url: http://127.0.0.1:32400
   token: "YOUR_PLEX_TOKEN"
   user_tokens:
-    epstowe: "EPSTOWE_PLEX_TOKEN"
-    adelaidestowe: "ADELAIDE_PLEX_TOKEN"
+    alice: "ALICE_PLEX_TOKEN"
+    bob: "BOB_PLEX_TOKEN"
   user_emails:
-    mstowe: mstowe@example.com
-    epstowe: evelyn@example.com
+    admin: admin@example.com
+    alice: alice@example.com
 
 sonarr:
   url: http://127.0.0.1:8989
@@ -104,7 +104,7 @@ ombi:
 
 `user_tokens` provides per-user Plex tokens so MediaCleaner can check watch status for individual users. Without a token for a user, it falls back to the admin token and sees the admin's watch status — which gives incorrect results.
 
-The admin/server owner (`mstowe` in the example) doesn't need an entry — the main `token` is used for them.
+The admin/server owner doesn't need an entry — the main `token` is used for them.
 
 To get a shared user's token:
 
