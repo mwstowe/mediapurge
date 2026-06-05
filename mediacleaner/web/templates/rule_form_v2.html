@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit" if rule else "New" }} Rule — MediaCleaner{% endblock %}
+{% block content %}
+{% if breadcrumb %}
+<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;padding:0.75rem;background:#16213e;border-radius:8px;">
+  <img src="{{ url_for('plex_thumb', path=breadcrumb.thumb) }}" style="height:60px;border-radius:6px;" alt="">
+  <div>
+    <strong style="font-size:1.1rem;">{{ breadcrumb.title }}</strong>
+    {% if breadcrumb.year %}<span style="color:#aaa;"> ({{ breadcrumb.year }})</span>{% endif %}
+    <br><span style="color:#aaa;font-size:0.85rem;">{{ request.args.get("scope", "") | title }} Rule</span>
+  </div>
+</div>
+{% endif %}
+<h1>{{ "Edit" if rule else "New" }} Rule</h1>
+<form method="post">
+
+<!-- APPLIES TO -->
+<fieldset style="border:1px solid #333;padding:1rem;border-radius:6px;margin-bottom:1rem;">
+  <legend style="color:#4fc3f7;font-weight:bold;">Applies To</legend>
+
+  <label for="scope">Scope</label>
+  <select name="scope" id="scope">
+    <option value="library" {{ "selected" if (rule and rule.scope == "library") or (not rule and request.args.get("scope") == "library") }}>Entire Library</option>
+    <option value="show" {{ "selected" if (rule and rule.scope == "show") or (not rule and request.args.get("scope") == "show") }}>Specific Show or Movie</option>
+    <option value="season" {{ "selected" if (rule and rule.scope == "season") or (not rule and request.args.get("scope") == "season") }}>Specific Season</option>
+    <option value="episode" {{ "selected" if (rule and rule.scope == "episode") or (not rule and request.args.get("scope") == "episode") }}>Specific Episode</option>
+  </select>
+
+  <div id="f-library">
+    <label for="plex_library">Library Name</label>
+    <input name="plex_library" id="plex_library" value="{{ rule.plex_library or '' if rule else request.args.get('plex_library', '') }}">
+  </div>
+  <div id="f-ratingkey">
+    <label for="plex_rating_key">Plex Rating Key</label>
+    <input name="plex_rating_key" id="plex_rating_key" value="{{ rule.plex_rating_key or '' if rule else request.args.get('plex_rating_key', '') }}">
+  </div>
+  <label for="media_title">Rule Name</label>
+  <input name="media_title" id="media_title" value="{{ rule.media_title or '' if rule else request.args.get('media_title', '') }}">
+
+  <label for="action">Action</label>
+  <select name="action" id="action">
+    <option value="keep" {{ "selected" if rule and rule.action == "keep" }}>Keep — protect from broader delete rules</option>
+    <option value="delete" {{ "selected" if (rule and rule.action == "delete") or not rule }}>Delete — remove when conditions are met</option>
+  </select>
+</fieldset>
+
+<!-- EPISODE HANDLING (shows only) -->
+<fieldset id="f-episode-opts" style="border:1px solid #333;padding:1rem;border-radius:6px;margin-bottom:1rem;">
+  <legend style="color:#4fc3f7;font-weight:bold;">Episode Handling</legend>
+
+  <label>Watched By</label>
+  <div style="margin:0.3rem 0 0.5rem;">
+    <label style="display:inline;margin-right:1rem;"><input type="checkbox" name="watched_by" value="any" {{ "checked" if (rule and "any" in rule.watched_by) or not rule }}> Any user</label>
+    {% for u in plex_users %}
+    <label style="display:inline;margin-right:1rem;"><input type="checkbox" name="watched_by" value="{{ u.username }}" {{ "checked" if rule and u.username in rule.watched_by }}> {{ u.username }}</label>
+    {% endfor %}
+  </div>
+
+  <label><input type="checkbox" name="protect_on_deck" {{ "checked" if not rule or rule.protect_on_deck }}> Protect On Deck</label>
+
+  <label>Processing mode</label>
+  <div style="margin:0.3rem 0 0.5rem;">
+    <label style="display:block;margin:0.2rem 0;"><input type="radio" name="processing_mode" value="episode" {{ "checked" if not rule or (not rule.delete_by_season) }}> Per episode — delete individual episodes as they qualify</label>
+    <label style="display:block;margin:0.2rem 0;"><input type="radio" name="processing_mode" value="season" {{ "checked" if rule and rule.delete_by_season }}> Per season — delete whole seasons when fully watched</label>
+  </div>
+
+  <label for="min_episodes" id="lbl-min-episodes">Always keep the latest</label>
+  <input type="number" name="min_episodes" id="min_episodes" value="{{ rule.min_episodes if rule else 0 }}" style="max-width:80px;display:inline;"> <span id="lbl-unit">episodes</span>
+
+  <label><input type="checkbox" name="remove_show_when_empty" id="remove_show_when_empty" {{ "checked" if rule and rule.remove_show_when_empty }}> Delete show from manager when all episodes are removed</label>
+</fieldset>
+
+<!-- TRIGGERS -->
+<fieldset id="f-triggers" style="border:1px solid #333;padding:1rem;border-radius:6px;margin-bottom:1rem;">
+  <legend style="color:#4fc3f7;font-weight:bold;">Triggers</legend>
+
+  <div id="trigger-list">
+    {% set triggers = rule.triggers if rule and rule.triggers else [{}] %}
+    {% for t in triggers %}
+    <div class="trigger-card" data-index="{{ loop.index0 }}" style="background:#1a1a2e;border:1px solid #444;border-radius:6px;padding:1rem;margin-bottom:0.75rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <strong>Trigger {{ loop.index }}</strong>
+        <button type="button" class="btn btn-danger btn-sm remove-trigger" style="display:{{ 'none' if loop.length == 1 else '' }}">✕</button>
+      </div>
+
+      <label>Type</label>
+      <select name="trigger_type[]" class="trigger-type">
+        <option value="watched" {{ "selected" if t.get("type","watched") == "watched" }}>After watched</option>
+        <option value="inactive" {{ "selected" if t.get("type") == "inactive" }}>After inactivity</option>
+        <option value="age" {{ "selected" if t.get("type") == "age" }}>After age (hard limit)</option>
+      </select>
+
+      <label class="lbl-days">Days</label>
+      <input type="number" name="trigger_days[]" value="{{ t.get('days', 7) }}" style="max-width:80px;">
+
+      <label>On trigger</label>
+      <div style="margin:0.3rem 0;">
+        <label style="display:block;"><input type="radio" name="trigger_action_{{ loop.index0 }}" value="delete" {{ "checked" if t.get("action","delete") == "delete" }}> Delete immediately</label>
+        <label style="display:block;"><input type="radio" name="trigger_action_{{ loop.index0 }}" value="confirm" {{ "checked" if t.get("action") == "confirm" }}> Confirm first</label>
+      </div>
+
+      <div class="confirm-opts" style="margin-left:1.5rem;display:{{ '' if t.get('action') == 'confirm' else 'none' }};">
+        <label>Wait period (days)</label>
+        <input type="number" name="trigger_confirm_days[]" value="{{ t.get('confirm_days', 7) }}" style="max-width:80px;">
+
+        <label>Notify</label>
+        <select name="trigger_confirm_email[]">
+          <option value="">— Default (admin) —</option>
+          {% for u in plex_users %}
+          {% if u.email %}
+          <option value="{{ u.email }}" {{ "selected" if t.get("confirm_email") == u.email }}>{{ u.username }} ({{ u.email }})</option>
+          {% endif %}
+          {% endfor %}
+        </select>
+
+        <label>User can keep by:</label>
+        <div class="confirm-methods">
+          <label class="cm-unwatched" style="display:block;"><input type="checkbox" name="trigger_cm_unwatched_{{ loop.index0 }}" {{ "checked" if "mark_unwatched" in t.get("confirm_methods","") }}> Mark as unwatched (resets watched timer)</label>
+          <label class="cm-watching" style="display:block;"><input type="checkbox" name="trigger_cm_watching_{{ loop.index0 }}" {{ "checked" if "start_watching" in t.get("confirm_methods","") }}> Start watching (any playback cancels)</label>
+          <label class="cm-snooze" style="display:block;"><input type="checkbox" name="trigger_cm_snooze_{{ loop.index0 }}" {{ "checked" if "snooze" in t.get("confirm_methods","") or not t.get("confirm_methods") }}> Click "snooze" link (resets timer)</label>
+          <label class="cm-disable" style="display:block;"><input type="checkbox" name="trigger_cm_disable_{{ loop.index0 }}" {{ "checked" if "disable" in t.get("confirm_methods","") }}> Click "disable" link (stops this trigger permanently)</label>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <button type="button" id="add-trigger" class="btn btn-primary btn-sm">+ Add Trigger</button>
+</fieldset>
+
+<label><input type="checkbox" name="enabled" {{ "checked" if not rule or rule.enabled }}> Enabled</label>
+<br><br>
+<button type="submit" class="btn btn-primary">Save</button>
+<a href="{{ url_for('rules_list') }}">Cancel</a>
+</form>
+
+<script>
+function updateVisibility() {
+  var action = document.getElementById('action').value;
+  var scope = document.getElementById('scope').value;
+  var mediaType = '{{ breadcrumb.type if breadcrumb else request.args.get("type", "") }}';
+  var isShow = (scope !== 'episode') && (mediaType !== 'movie');
+  var mode = document.querySelector('input[name="processing_mode"]:checked');
+
+  document.getElementById('f-library').style.display = scope === 'library' ? '' : 'none';
+  document.getElementById('f-ratingkey').style.display = scope !== 'library' ? '' : 'none';
+  document.getElementById('f-episode-opts').style.display = (action === 'delete' && isShow) ? '' : 'none';
+  document.getElementById('f-triggers').style.display = action === 'delete' ? '' : 'none';
+  document.getElementById('lbl-unit').textContent = (mode && mode.value === 'season') ? 'seasons' : 'episodes';
+}
+
+function updateTriggerVisibility(card) {
+  var type = card.querySelector('.trigger-type').value;
+  var actionRadios = card.querySelectorAll('input[type="radio"]');
+  var isConfirm = actionRadios[1] && actionRadios[1].checked;
+  card.querySelector('.confirm-opts').style.display = isConfirm ? '' : 'none';
+  // Show/hide confirm methods based on trigger type
+  var methods = card.querySelector('.confirm-methods');
+  if (methods) {
+    methods.querySelector('.cm-unwatched').style.display = type === 'watched' ? '' : 'none';
+    methods.querySelector('.cm-watching').style.display = type === 'inactive' ? '' : 'none';
+  }
+  // Update days label
+  var lbl = card.querySelector('.lbl-days');
+  if (type === 'watched') lbl.textContent = 'Grace period (days after watched)';
+  else if (type === 'inactive') lbl.textContent = 'Days of inactivity';
+  else lbl.textContent = 'Days since added';
+}
+
+document.getElementById('action').addEventListener('change', updateVisibility);
+document.getElementById('scope').addEventListener('change', updateVisibility);
+document.querySelectorAll('input[name="processing_mode"]').forEach(r => r.addEventListener('change', updateVisibility));
+updateVisibility();
+
+// Trigger interactions
+document.querySelectorAll('.trigger-card').forEach(card => {
+  card.querySelector('.trigger-type').addEventListener('change', () => updateTriggerVisibility(card));
+  card.querySelectorAll('input[type="radio"]').forEach(r => r.addEventListener('change', () => updateTriggerVisibility(card)));
+  updateTriggerVisibility(card);
+});
+
+// Add trigger
+document.getElementById('add-trigger').addEventListener('click', function() {
+  var list = document.getElementById('trigger-list');
+  var idx = list.children.length;
+  var template = list.children[0].cloneNode(true);
+  template.dataset.index = idx;
+  template.querySelector('strong').textContent = 'Trigger ' + (idx + 1);
+  template.querySelector('.remove-trigger').style.display = '';
+  // Reset values
+  template.querySelectorAll('input[type="number"]').forEach(i => i.value = i === template.querySelectorAll('input[type="number"]')[0] ? '7' : '7');
+  template.querySelectorAll('input[type="checkbox"]').forEach(i => i.checked = false);
+  template.querySelectorAll('input[type="radio"]')[0].checked = true;
+  // Fix radio names
+  template.querySelectorAll('input[type="radio"]').forEach(r => {
+    r.name = r.name.replace(/_\d+$/, '_' + idx);
+  });
+  template.querySelectorAll('input[type="checkbox"]').forEach(r => {
+    if (r.name.match(/_\d+$/)) r.name = r.name.replace(/_\d+$/, '_' + idx);
+  });
+  list.appendChild(template);
+  // Re-bind events
+  template.querySelector('.trigger-type').addEventListener('change', () => updateTriggerVisibility(template));
+  template.querySelectorAll('input[type="radio"]').forEach(r => r.addEventListener('change', () => updateTriggerVisibility(template)));
+  updateTriggerVisibility(template);
+  // Show all remove buttons
+  list.querySelectorAll('.remove-trigger').forEach(b => b.style.display = '');
+});
+
+// Remove trigger
+document.addEventListener('click', function(e) {
+  if (e.target.classList.contains('remove-trigger')) {
+    e.target.closest('.trigger-card').remove();
+    var list = document.getElementById('trigger-list');
+    if (list.children.length === 1) list.querySelector('.remove-trigger').style.display = 'none';
+    // Renumber
+    Array.from(list.children).forEach((card, i) => {
+      card.querySelector('strong').textContent = 'Trigger ' + (i + 1);
+    });
+  }
+});
+</script>
+{% endblock %}
