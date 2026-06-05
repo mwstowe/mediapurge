@@ -49,3 +49,16 @@ def ignore_episode(show_slug: str, season: int, episode: int):
         verify=False,
     )
     r.raise_for_status()
+
+
+def refresh_show(show_slug: str):
+    """Trigger a show refresh to clear stale file info."""
+    url, headers = _base()
+    cfg = get_config()["medusa"]
+    # Extract TVDB ID from slug (e.g., "tvdb448176" -> 448176)
+    tvdb_id = show_slug.replace("tvdb", "")
+    r = requests.get(
+        f"{url}/api/v1/{cfg['api_key']}/?cmd=show.refresh&tvdbid={tvdb_id}",
+        verify=False,
+    )
+    r.raise_for_status()

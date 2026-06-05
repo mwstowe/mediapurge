@@ -590,6 +590,7 @@ def run_orphan_scan() -> list[EvalResult]:
 def execute_deletions(report: EngineReport):
     """Actually perform deletions for items marked 'delete' in the report."""
     rules_to_delete = set()
+    medusa_shows_refreshed = set()
 
     for result in report.results:
         if result.action != "delete":
@@ -599,6 +600,8 @@ def execute_deletions(report: EngineReport):
             is_episode = " - S" in result.title
             if is_episode:
                 _delete_episode(result)
+                if result.manager == "medusa" and result.manager_id:
+                    medusa_shows_refreshed.add(str(result.manager_id))
             elif result.manager == "sonarr":
                 sonarr.delete_series(int(result.manager_id), delete_files=True)
                 ombi.cleanup_for_title(result.title)
@@ -631,6 +634,13 @@ def execute_deletions(report: EngineReport):
                 session.delete(rule)
         session.commit()
         session.close()
+
+    # Refresh Medusa shows that had episodes deleted (clears stale file info)
+    for slug in medusa_shows_refreshed:
+        try:
+            medusa.refresh_show(slug)
+        except Exception:
+            pass
 
     # Trigger Plex library scan to reflect deletions
     if any(r.action == "delete" for r in report.results):
