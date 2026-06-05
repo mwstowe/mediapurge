@@ -694,6 +694,19 @@ def _delete_episode(result: EvalResult):
         for ef in ep_files:
             if ef.get("path") and ef["path"] in ep_paths:
                 sonarr.delete_episode_file(ef["id"])
+                # Unmonitor the episode so Sonarr doesn't re-download
+                try:
+                    series_eps = sonarr.get_episodes(int(result.manager_id))
+                    ep_ids = [e["id"] for e in series_eps
+                              if e["seasonNumber"] == season and e["episodeNumber"] == episode]
+                    if ep_ids:
+                        sonarr.unmonitor_episodes(ep_ids)
+                    # If no monitored episodes remain in this season, unmonitor the season
+                    season_eps = [e for e in series_eps if e["seasonNumber"] == season]
+                    if all(not e["monitored"] or e["id"] in ep_ids for e in season_eps):
+                        sonarr.unmonitor_season(int(result.manager_id), season)
+                except Exception as e:
+                    log.warning(f"Could not unmonitor in Sonarr: {e}")
                 return
         log.warning(f"Could not match episode file for {result.title}")
 
