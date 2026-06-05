@@ -59,10 +59,41 @@ def _run_maintenance():
             execute_deletions(report)
 
         deletions = [r for r in report.results if r.action == "delete"]
-        summary = f"Maintenance complete: {len(deletions)} deletions"
-        if dry_run:
-            summary += " (dry run)"
+        pending = [r for r in report.results if r.action == "pending_confirm"]
+        total_bytes = sum(r.file_size for r in deletions)
+
+        lines = []
+        mode = "DRY RUN" if dry_run else "LIVE"
+        lines.append(f"MediaCleaner Maintenance [{mode}]\n")
+
+        if deletions:
+            def _human(b):
+                for u in ("B", "KB", "MB", "GB", "TB"):
+                    if abs(b) < 1024:
+                        return f"{b:.1f} {u}"
+                    b /= 1024
+                return f"{b:.1f} PB"
+            lines.append(f"Deleted ({len(deletions)}) — {_human(total_bytes)} recovered:")
+            for r in deletions:
+                lines.append(f"  • {r.title}")
+        else:
+            lines.append("No deletions.")
+
+        if pending:
+            lines.append(f"\nNotifications sent ({len(pending)}):")
+            for r in pending:
+                lines.append(f"  • {r.title}")
+
+        if report.errors:
+            lines.append(f"\nErrors ({len(report.errors)}):")
+            for e in report.errors:
+                lines.append(f"  • {e}")
+
+        summary = "\n".join(lines)
         log.info(summary)
-        notify.send("MediaCleaner Maintenance", summary)
+
+        # Only send email if there's something to report
+        if deletions or pending or report.errors:
+            notify.send("MediaCleaner Maintenance", summary)
     except Exception as e:
         log.error(f"Maintenance failed: {e}")
