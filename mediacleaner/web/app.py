@@ -121,6 +121,28 @@ def create_app() -> Flask:
             plex_users = []
         return render_template("rule_form.html", rule=None, breadcrumb=breadcrumb, plex_users=plex_users)
 
+    @app.route("/rules/new2")
+    @login_required
+    def rules_new_v2():
+        """Preview of the new rule form (v2 with triggers)."""
+        breadcrumb = None
+        rating_key = request.args.get("plex_rating_key")
+        if rating_key:
+            try:
+                from mediacleaner.clients import plex as plex_client
+                server = plex_client._server()
+                item = server.fetchItem(int(rating_key))
+                breadcrumb = {"title": item.title, "thumb": item.thumb,
+                              "year": getattr(item, "year", ""), "type": item.type}
+            except Exception:
+                pass
+        try:
+            from mediacleaner.clients import plex as plex_client
+            plex_users = plex_client.get_users()
+        except Exception:
+            plex_users = []
+        return render_template("rule_form_v2.html", rule=None, breadcrumb=breadcrumb, plex_users=plex_users)
+
     @app.route("/rules/<int:rule_id>/edit", methods=["GET", "POST"])
     @login_required
     def rules_edit(rule_id):

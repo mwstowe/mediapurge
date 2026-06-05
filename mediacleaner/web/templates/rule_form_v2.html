@@ -70,6 +70,19 @@
   <label><input type="checkbox" name="remove_show_when_empty" id="remove_show_when_empty" {{ "checked" if rule and rule.remove_show_when_empty }}> Delete show from manager when all episodes are removed</label>
 </fieldset>
 
+<!-- WATCHED BY (movies only) -->
+<fieldset id="f-movie-opts" style="border:1px solid #333;padding:1rem;border-radius:6px;margin-bottom:1rem;">
+  <legend style="color:#4fc3f7;font-weight:bold;">Watch Conditions</legend>
+
+  <label>Watched By</label>
+  <div style="margin:0.3rem 0 0.5rem;">
+    <label style="display:inline;margin-right:1rem;"><input type="checkbox" name="watched_by" value="any" {{ "checked" if (rule and "any" in rule.watched_by) or not rule }}> Any user</label>
+    {% for u in plex_users %}
+    <label style="display:inline;margin-right:1rem;"><input type="checkbox" name="watched_by" value="{{ u.username }}" {{ "checked" if rule and u.username in rule.watched_by }}> {{ u.username }}</label>
+    {% endfor %}
+  </div>
+</fieldset>
+
 <!-- TRIGGERS -->
 <fieldset id="f-triggers" style="border:1px solid #333;padding:1rem;border-radius:6px;margin-bottom:1rem;">
   <legend style="color:#4fc3f7;font-weight:bold;">Triggers</legend>
@@ -139,12 +152,14 @@ function updateVisibility() {
   var action = document.getElementById('action').value;
   var scope = document.getElementById('scope').value;
   var mediaType = '{{ breadcrumb.type if breadcrumb else request.args.get("type", "") }}';
-  var isShow = (scope !== 'episode') && (mediaType !== 'movie');
+  var isMovie = mediaType === 'movie' || scope === 'episode';
+  var isShow = !isMovie;
   var mode = document.querySelector('input[name="processing_mode"]:checked');
 
   document.getElementById('f-library').style.display = scope === 'library' ? '' : 'none';
   document.getElementById('f-ratingkey').style.display = scope !== 'library' ? '' : 'none';
   document.getElementById('f-episode-opts').style.display = (action === 'delete' && isShow) ? '' : 'none';
+  document.getElementById('f-movie-opts').style.display = (action === 'delete' && isMovie) ? '' : 'none';
   document.getElementById('f-triggers').style.display = action === 'delete' ? '' : 'none';
   document.getElementById('lbl-unit').textContent = (mode && mode.value === 'season') ? 'seasons' : 'episodes';
 }
