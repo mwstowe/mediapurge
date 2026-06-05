@@ -61,7 +61,7 @@
   <label>Processing mode</label>
   <div style="margin:0.3rem 0 0.5rem;">
     <label style="display:block;margin:0.2rem 0;"><input type="radio" name="processing_mode" value="episode" {{ "checked" if not rule or (not rule.delete_by_season) }}> Per episode — delete individual episodes as they qualify</label>
-    <label style="display:block;margin:0.2rem 0;"><input type="radio" name="processing_mode" value="season" {{ "checked" if rule and rule.delete_by_season }}> Per season — delete whole seasons when fully watched</label>
+    <label style="display:block;margin:0.2rem 0;"><input type="radio" name="processing_mode" value="season" {{ "checked" if rule and rule.delete_by_season }}> Per season — delete whole seasons when all episodes in the season qualify</label>
   </div>
 
   <label for="min_episodes" id="lbl-min-episodes">Always keep the latest</label>
@@ -118,7 +118,7 @@
 
         <label>Notify</label>
         <select name="trigger_confirm_email[]">
-          <option value="">— Default (admin) —</option>
+          <option value="">— Same as Watched By —</option>
           {% for u in plex_users %}
           {% if u.email %}
           <option value="{{ u.email }}" {{ "selected" if t.get("confirm_email") == u.email }}>{{ u.username }} ({{ u.email }})</option>
