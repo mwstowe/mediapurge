@@ -612,6 +612,8 @@ def execute_deletions(report: EngineReport):
                 ombi.cleanup_for_title(result.title)
             elif result.manager == "medusa":
                 medusa.delete_show(str(result.manager_id), remove_files=True)
+                # Fallback: remove files directly if Medusa didn't
+                _delete_direct(result)
                 ombi.cleanup_for_title(result.title)
             elif result.manager == "none":
                 _delete_direct(result)

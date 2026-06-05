@@ -57,7 +57,7 @@ def create_app() -> Flask:
     def dashboard():
         db = get_session()
         rule_count = db.query(Rule).count()
-        orphan_count = db.query(ManagedMedia).filter_by(manager="none").count()
+        orphan_count = len(_orphan_task["results"]) if _orphan_task["results"] else 0
         recent = db.execute(
             select(ActionLog).order_by(desc(ActionLog.timestamp)).limit(20)
         ).scalars().all()
@@ -167,16 +167,36 @@ def create_app() -> Flask:
         db.close()
         return redirect(url_for("rules_list"))
 
+    _orphan_task = {"running": False, "results": None}
+
     @app.route("/orphans")
     @login_required
     def orphans():
-        from mediacleaner.engine import run_orphan_scan
-        try:
-            sync_managed_media()
-            orphan_list = run_orphan_scan()
-        except Exception as e:
-            orphan_list = []
-        return render_template("orphans.html", orphans=orphan_list)
+        if _orphan_task["running"]:
+            return render_template("orphans.html", orphans=None, running=True)
+        if request.args.get("scan"):
+            _orphan_task["running"] = True
+            _orphan_task["results"] = None
+            import threading
+            def _scan():
+                from mediacleaner.engine import run_orphan_scan
+                try:
+                    sync_managed_media()
+                    _orphan_task["results"] = run_orphan_scan()
+                except Exception:
+                    _orphan_task["results"] = []
+                _orphan_task["running"] = False
+            threading.Thread(target=_scan, daemon=True).start()
+            return render_template("orphans.html", orphans=None, running=True)
+        return render_template("orphans.html", orphans=_orphan_task["results"], running=False)
+
+    @app.route("/orphans/status")
+    @login_required
+    def orphans_status():
+        import json as jsonlib
+        if _orphan_task["running"]:
+            return jsonlib.dumps({"running": True})
+        return jsonlib.dumps({"running": False, "done": True})
 
     @app.route("/log")
     @login_required
