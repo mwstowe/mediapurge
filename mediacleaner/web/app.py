@@ -7,9 +7,10 @@ from flask import Flask, redirect, render_template, request, session, url_for
 from mediacleaner.config import get_config, load_config
 from mediacleaner.db import get_session, init_db
 from mediacleaner.engine import run_evaluation, sync_managed_media
-from mediacleaner.models import ActionLog, ManagedMedia, Rule
+from mediacleaner.models import ActionLog, ManagedMedia, Rule, Trigger
 
 from sqlalchemy import select, desc
+from sqlalchemy.orm import joinedload
 
 
 def create_app() -> Flask:
@@ -73,58 +74,64 @@ def create_app() -> Flask:
         db.close()
         return render_template("rules.html", rules=rules)
 
+    def _parse_triggers_from_form():
+        """Parse trigger arrays from the submitted form."""
+        types = request.form.getlist("trigger_type[]")
+        days_list = request.form.getlist("trigger_days[]")
+        confirm_days_list = request.form.getlist("trigger_confirm_days[]")
+        confirm_emails = request.form.getlist("trigger_confirm_email[]")
+
+        triggers = []
+        for i, ttype in enumerate(types):
+            action = request.form.get(f"trigger_action_{i}", "delete")
+            # Build confirm_methods from checkboxes
+            methods = []
+            if request.form.get(f"trigger_cm_unwatched_{i}"):
+                methods.append("mark_unwatched")
+            if request.form.get(f"trigger_cm_watching_{i}"):
+                methods.append("start_watching")
+            if request.form.get(f"trigger_cm_snooze_{i}"):
+                methods.append("snooze")
+            if request.form.get(f"trigger_cm_disable_{i}"):
+                methods.append("disable")
+            if not methods:
+                methods = ["snooze"]
+
+            triggers.append(Trigger(
+                type=ttype,
+                days=int(days_list[i]) if i < len(days_list) else 7,
+                action=action,
+                confirm_days=int(confirm_days_list[i]) if i < len(confirm_days_list) else 7,
+                confirm_methods=",".join(methods),
+                confirm_email=confirm_emails[i] if i < len(confirm_emails) and confirm_emails[i] else None,
+                enabled=True,
+            ))
+        return triggers
+
     @app.route("/rules/new", methods=["GET", "POST"])
     @login_required
     def rules_new():
         if request.method == "POST":
             db = get_session()
-            db.add(Rule(
+            rule = Rule(
                 scope=request.form["scope"],
                 plex_library=request.form.get("plex_library") or None,
                 plex_rating_key=request.form.get("plex_rating_key") or None,
                 media_title=request.form.get("media_title") or None,
                 action=request.form["action"],
-                min_days_watched=int(request.form.get("min_days_watched", 7)),
-                max_days_age=int(request.form.get("max_days_age", 0)),
-                max_days_inactive=int(request.form.get("max_days_inactive", 0)),
-                min_episodes=int(request.form.get("min_episodes", 0)),
                 watched_by=",".join(request.form.getlist("watched_by")) or "any",
                 protect_on_deck="protect_on_deck" in request.form,
-                all_watched="all_watched" in request.form,
-                delete_by_season="delete_by_season" in request.form,
-                confirm_before_delete="confirm_before_delete" in request.form,
-                confirm_days=int(request.form.get("confirm_days", 7)),
-                confirm_method=request.form.get("confirm_method") or None,
-                confirm_email=request.form.get("confirm_email") or None,
+                processing_mode=request.form.get("processing_mode", "episode"),
+                min_episodes=int(request.form.get("min_episodes", 0)),
+                remove_show_when_empty="remove_show_when_empty" in request.form,
                 enabled="enabled" in request.form,
-            ))
+            )
+            rule.triggers = _parse_triggers_from_form()
+            db.add(rule)
             db.commit()
             db.close()
             return redirect(url_for("rules_list"))
-        # Build breadcrumb if coming from browse
-        breadcrumb = None
-        rating_key = request.args.get("plex_rating_key")
-        if rating_key:
-            try:
-                from mediacleaner.clients import plex as plex_client
-                server = plex_client._server()
-                item = server.fetchItem(int(rating_key))
-                breadcrumb = {"title": item.title, "thumb": item.thumb,
-                              "year": getattr(item, "year", ""), "type": item.type}
-            except Exception:
-                pass
-        # Get Plex users for dropdowns
-        try:
-            from mediacleaner.clients import plex as plex_client
-            plex_users = plex_client.get_users()
-        except Exception:
-            plex_users = []
-        return render_template("rule_form.html", rule=None, breadcrumb=breadcrumb, plex_users=plex_users)
 
-    @app.route("/rules/new2")
-    @login_required
-    def rules_new_v2():
-        """Preview of the new rule form (v2 with triggers)."""
         breadcrumb = None
         rating_key = request.args.get("plex_rating_key")
         if rating_key:
@@ -147,36 +154,53 @@ def create_app() -> Flask:
     @login_required
     def rules_edit(rule_id):
         db = get_session()
-        rule = db.get(Rule, rule_id)
+        rule = db.execute(
+            select(Rule).options(joinedload(Rule.triggers)).where(Rule.id == rule_id)
+        ).unique().scalar_one_or_none()
+        if not rule:
+            db.close()
+            return redirect(url_for("rules_list"))
+
         if request.method == "POST":
             rule.scope = request.form["scope"]
             rule.plex_library = request.form.get("plex_library") or None
             rule.plex_rating_key = request.form.get("plex_rating_key") or None
             rule.media_title = request.form.get("media_title") or None
             rule.action = request.form["action"]
-            rule.min_days_watched = int(request.form.get("min_days_watched", 7))
-            rule.max_days_age = int(request.form.get("max_days_age", 0))
-            rule.max_days_inactive = int(request.form.get("max_days_inactive", 0))
-            rule.min_episodes = int(request.form.get("min_episodes", 0))
             rule.watched_by = ",".join(request.form.getlist("watched_by")) or "any"
             rule.protect_on_deck = "protect_on_deck" in request.form
-            rule.all_watched = "all_watched" in request.form
-            rule.delete_by_season = "delete_by_season" in request.form
-            rule.confirm_before_delete = "confirm_before_delete" in request.form
-            rule.confirm_days = int(request.form.get("confirm_days", 7))
-            rule.confirm_method = request.form.get("confirm_method") or None
-            rule.confirm_email = request.form.get("confirm_email") or None
+            rule.processing_mode = request.form.get("processing_mode", "episode")
+            rule.min_episodes = int(request.form.get("min_episodes", 0))
+            rule.remove_show_when_empty = "remove_show_when_empty" in request.form
             rule.enabled = "enabled" in request.form
+            # Replace triggers
+            rule.triggers.clear()
+            rule.triggers = _parse_triggers_from_form()
             db.commit()
             db.close()
             return redirect(url_for("rules_list"))
+
+        # Convert triggers to dicts for template
+        triggers_data = []
+        for t in rule.triggers:
+            triggers_data.append({
+                "type": t.type, "days": t.days, "action": t.action,
+                "confirm_days": t.confirm_days, "confirm_methods": t.confirm_methods,
+                "confirm_email": t.confirm_email,
+            })
+        if not triggers_data:
+            triggers_data = [{}]
+
         db.close()
         try:
             from mediacleaner.clients import plex as plex_client
             plex_users = plex_client.get_users()
         except Exception:
             plex_users = []
-        return render_template("rule_form.html", rule=rule, breadcrumb=None, plex_users=plex_users)
+
+        # Attach triggers data to rule object for template
+        rule.triggers_data = triggers_data
+        return render_template("rule_form_v2.html", rule=rule, breadcrumb=None, plex_users=plex_users)
 
     @app.route("/rules/<int:rule_id>/delete", methods=["POST"])
     @login_required
@@ -250,15 +274,12 @@ def create_app() -> Flask:
     @login_required
     def preview():
         mode = request.args.get("mode")
-        # If task is running, show the polling page regardless
         if _task["running"]:
             return render_template("preview.html", report=None, error=None, ran=False, running=True)
-        # If task just finished and no new mode requested, show results
         if _task["report"] is not None and mode is None:
             report = _task["report"]
             ran = _task["mode"] == "run"
             return render_template("preview.html", report=report, error=_task["error"], ran=ran, running=False)
-        # Start a new task
         if mode in ("preview", "run"):
             _task["running"] = True
             _task["report"] = None
@@ -337,7 +358,6 @@ def create_app() -> Flask:
                 "managers": ", ".join(mgr["managers"]) if mgr else "—",
                 "ended": mgr["ended"] if mgr else None,
             })
-        # Build lookup of existing rules by rating key
         db = get_session()
         rules_by_key = {r.plex_rating_key: r for r in db.query(Rule).filter(Rule.scope == "show", Rule.enabled == True).all()}
         lib_rules = db.query(Rule).filter(Rule.scope == "library", Rule.plex_library == library, Rule.enabled == True).all()
@@ -349,7 +369,7 @@ def create_app() -> Flask:
     @app.route("/browse/<library>/<int:rating_key>")
     @login_required
     def browse_item(library, rating_key):
-        """Show detail for a specific item (show seasons/episodes)."""
+        """Show detail for a specific item."""
         from mediacleaner.clients import plex as plex_client
         server = plex_client._server()
         item = server.fetchItem(rating_key)
@@ -374,7 +394,7 @@ def create_app() -> Flask:
     @app.route("/plex_thumb")
     @login_required
     def plex_thumb():
-        """Proxy Plex thumbnails to avoid exposing the token to the browser."""
+        """Proxy Plex thumbnails."""
         import requests as req
         thumb_path = request.args.get("path", "")
         if not thumb_path:
@@ -394,7 +414,6 @@ def create_app() -> Flask:
         SENSITIVE_KEYS = ("smtp_pass", "admin_password", "secret_key", "api_key", "token")
 
         def _mask_yaml(text):
-            """Mask sensitive values for display."""
             def replacer(m):
                 return f"{m.group(1)}{MASK}"
             for key in SENSITIVE_KEYS:
@@ -402,7 +421,6 @@ def create_app() -> Flask:
             return text
 
         def _restore_secrets(new_text, old_text):
-            """Restore masked values from the original file."""
             old_cfg = yaml.safe_load(old_text) or {}
             new_cfg = yaml.safe_load(new_text) or {}
             _restore_nested(new_cfg, old_cfg)
@@ -438,7 +456,6 @@ def create_app() -> Flask:
     @app.route("/config/password", methods=["POST"])
     @login_required
     def config_password():
-        """Change admin password."""
         import yaml
         config_path = os.environ.get("MEDIACLEANER_CONFIG", "config.yaml")
         new_pass = request.form.get("new_password", "")
@@ -484,11 +501,32 @@ def create_app() -> Flask:
                 results[name] = {"ok": False, "detail": str(e)}
         return render_template("config.html", config_yaml=None, test_results=results)
 
+    @app.route("/confirm/snooze/<token>")
+    def confirm_snooze(token):
+        from mediacleaner.engine import cancel_pending_by_token
+        if cancel_pending_by_token(token, "snooze"):
+            return render_template("confirm.html", success=True)
+        return render_template("confirm.html", success=False)
+
+    @app.route("/confirm/disable/<token>")
+    def confirm_disable(token):
+        from mediacleaner.engine import cancel_pending_by_token
+        if cancel_pending_by_token(token, "disable"):
+            return render_template("confirm.html", success=True)
+        return render_template("confirm.html", success=False)
+
+    @app.route("/confirm/unwatched/<token>")
+    def confirm_unwatched(token):
+        from mediacleaner.engine import cancel_pending_by_token
+        if cancel_pending_by_token(token, "unwatched"):
+            return render_template("confirm.html", success=True)
+        return render_template("confirm.html", success=False)
+
     @app.route("/confirm/keep/<token>")
     def confirm_keep(token):
-        """Public URL — no auth required. User clicks to cancel a pending deletion."""
+        """Legacy URL — treat as snooze."""
         from mediacleaner.engine import cancel_pending_by_token
-        if cancel_pending_by_token(token):
+        if cancel_pending_by_token(token, "snooze"):
             return render_template("confirm.html", success=True)
         return render_template("confirm.html", success=False)
 

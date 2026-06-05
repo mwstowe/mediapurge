@@ -36,7 +36,7 @@ def init_db():
 
 
 def _migrate():
-    """Add missing columns to existing tables without dropping data."""
+    """Add missing columns/tables to existing database."""
     import sqlite3
     cfg = get_config()
     db_path = cfg.get("database", {}).get("path", "mediacleaner.db")
@@ -48,14 +48,29 @@ def _migrate():
             defstr = f" DEFAULT {default}" if default is not None else ""
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {coltype}{defstr}")
 
-    _add_col("rules", "delete_by_season", "BOOLEAN", 0)
+    # Ensure triggers table exists
+    tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
+    if "triggers" not in tables:
+        conn.execute("""CREATE TABLE triggers (
+            id INTEGER PRIMARY KEY,
+            rule_id INTEGER REFERENCES rules(id),
+            type VARCHAR NOT NULL,
+            days INTEGER DEFAULT 7,
+            action VARCHAR DEFAULT 'delete',
+            confirm_days INTEGER DEFAULT 7,
+            confirm_methods VARCHAR DEFAULT 'snooze',
+            confirm_email VARCHAR,
+            snoozed_until DATETIME,
+            enabled BOOLEAN DEFAULT 1
+        )""")
+
+    # Rules table migrations
+    _add_col("rules", "processing_mode", "VARCHAR", "'episode'")
+    _add_col("rules", "remove_show_when_empty", "BOOLEAN", 0)
     _add_col("rules", "snoozed_until", "DATETIME", "NULL")
-    _add_col("rules", "all_watched", "BOOLEAN", 0)
-    _add_col("rules", "confirm_before_delete", "BOOLEAN", 1)
-    _add_col("rules", "confirm_days", "INTEGER", 7)
-    _add_col("rules", "confirm_method", "VARCHAR", "NULL")
-    _add_col("rules", "confirm_email", "VARCHAR", "NULL")
-    _add_col("rules", "max_days_inactive", "INTEGER", 0)
+
+    # PendingAction migrations
+    _add_col("pending_actions", "trigger_id", "INTEGER", "NULL")
 
     conn.commit()
     conn.close()

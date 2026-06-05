@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from mediacleaner.db import Base
 
@@ -14,30 +14,37 @@ class Rule(Base):
     __tablename__ = "rules"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    scope: Mapped[str] = mapped_column(Enum("library", "show", "season", "episode", name="rule_scope"))
+    scope: Mapped[str] = mapped_column(String)  # library/show/season/episode
     plex_library: Mapped[str | None] = mapped_column(String, nullable=True)
     plex_rating_key: Mapped[str | None] = mapped_column(String, nullable=True)
     media_title: Mapped[str | None] = mapped_column(String, nullable=True)
-    action: Mapped[str] = mapped_column(Enum("keep", "delete", name="rule_action"), default="keep")
-    min_days_watched: Mapped[int] = mapped_column(Integer, default=7)
-    max_days_age: Mapped[int] = mapped_column(Integer, default=0)
-    max_days_inactive: Mapped[int] = mapped_column(Integer, default=0)
-    min_episodes: Mapped[int] = mapped_column(Integer, default=0)
-    watched_by: Mapped[str] = mapped_column(String, default="any")
+    action: Mapped[str] = mapped_column(String, default='delete')  # keep/delete
+    watched_by: Mapped[str] = mapped_column(String, default='any')
     protect_on_deck: Mapped[bool] = mapped_column(Boolean, default=True)
-    all_watched: Mapped[bool] = mapped_column(Boolean, default=False)
-    delete_by_season: Mapped[bool] = mapped_column(Boolean, default=False)
-    # Confirmation settings
-    confirm_before_delete: Mapped[bool] = mapped_column(Boolean, default=True)
-    confirm_days: Mapped[int] = mapped_column(Integer, default=7)
-    confirm_method: Mapped[str | None] = mapped_column(
-        Enum("url_click", "start_watching", "mark_unwatched", name="confirm_method"), nullable=True
-    )
-    confirm_email: Mapped[str | None] = mapped_column(String, nullable=True)
+    processing_mode: Mapped[str] = mapped_column(String, default='episode')  # episode/season
+    min_episodes: Mapped[int] = mapped_column(Integer, default=0)
+    remove_show_when_empty: Mapped[bool] = mapped_column(Boolean, default=False)
     snoozed_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
+
+    triggers: Mapped[list["Trigger"]] = relationship("Trigger", backref="rule", cascade="all, delete-orphan")
+
+
+class Trigger(Base):
+    __tablename__ = "triggers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    rule_id: Mapped[int] = mapped_column(Integer, ForeignKey('rules.id'))
+    type: Mapped[str] = mapped_column(String)  # watched/inactive/age
+    days: Mapped[int] = mapped_column(Integer, default=7)
+    action: Mapped[str] = mapped_column(String, default='delete')  # delete/confirm
+    confirm_days: Mapped[int] = mapped_column(Integer, default=7)
+    confirm_methods: Mapped[str] = mapped_column(String, default='snooze')  # comma-separated
+    confirm_email: Mapped[str | None] = mapped_column(String, nullable=True)
+    snoozed_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class PendingAction(Base):
@@ -46,6 +53,7 @@ class PendingAction(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     rule_id: Mapped[int] = mapped_column(Integer, ForeignKey("rules.id"))
+    trigger_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("triggers.id"), nullable=True)
     plex_rating_key: Mapped[str] = mapped_column(String)
     media_title: Mapped[str] = mapped_column(String)
     token: Mapped[str] = mapped_column(String, unique=True)

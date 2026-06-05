@@ -60,8 +60,8 @@
 
   <label>Processing mode</label>
   <div style="margin:0.3rem 0 0.5rem;">
-    <label style="display:block;margin:0.2rem 0;"><input type="radio" name="processing_mode" value="episode" {{ "checked" if not rule or (not rule.delete_by_season) }}> Per episode — delete individual episodes as they qualify</label>
-    <label style="display:block;margin:0.2rem 0;"><input type="radio" name="processing_mode" value="season" {{ "checked" if rule and rule.delete_by_season }}> Per season — delete whole seasons when all episodes in the season qualify</label>
+    <label style="display:block;margin:0.2rem 0;"><input type="radio" name="processing_mode" value="episode" {{ "checked" if not rule or rule.processing_mode == "episode" }}> Per episode — delete individual episodes as they qualify</label>
+    <label style="display:block;margin:0.2rem 0;"><input type="radio" name="processing_mode" value="season" {{ "checked" if rule and rule.processing_mode == "season" }}> Per season — delete whole seasons when all episodes in the season qualify</label>
   </div>
 
   <label for="min_episodes" id="lbl-min-episodes">Always keep the latest</label>
@@ -88,7 +88,7 @@
   <legend style="color:#4fc3f7;font-weight:bold;">Triggers</legend>
 
   <div id="trigger-list">
-    {% set triggers = rule.triggers if rule and rule.triggers else [{}] %}
+    {% set triggers = rule.triggers_data if rule and rule.triggers_data else [{}] %}
     {% for t in triggers %}
     <div class="trigger-card" data-index="{{ loop.index0 }}" style="background:#1a1a2e;border:1px solid #444;border-radius:6px;padding:1rem;margin-bottom:0.75rem;">
       <div style="display:flex;justify-content:space-between;align-items:center;">
