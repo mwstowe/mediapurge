@@ -182,6 +182,18 @@ function updateTriggerVisibility(card) {
   else lbl.textContent = 'Days since added';
 }
 
+function setTriggerDefaults(card) {
+  var type = card.querySelector('.trigger-type').value;
+  var actionRadios = card.querySelectorAll('input[type="radio"]');
+  // Default: inactivity/age → confirm, watched → delete immediately
+  if (type === 'inactive' || type === 'age') {
+    actionRadios[1].checked = true;
+  } else {
+    actionRadios[0].checked = true;
+  }
+  updateTriggerVisibility(card);
+}
+
 document.getElementById('action').addEventListener('change', updateVisibility);
 document.getElementById('scope').addEventListener('change', updateVisibility);
 document.querySelectorAll('input[name="processing_mode"]').forEach(r => r.addEventListener('change', updateVisibility));
@@ -189,7 +201,7 @@ updateVisibility();
 
 // Trigger interactions
 document.querySelectorAll('.trigger-card').forEach(card => {
-  card.querySelector('.trigger-type').addEventListener('change', () => updateTriggerVisibility(card));
+  card.querySelector('.trigger-type').addEventListener('change', () => setTriggerDefaults(card));
   card.querySelectorAll('input[type="radio"]').forEach(r => r.addEventListener('change', () => updateTriggerVisibility(card)));
   updateTriggerVisibility(card);
 });
@@ -215,7 +227,7 @@ document.getElementById('add-trigger').addEventListener('click', function() {
   });
   list.appendChild(template);
   // Re-bind events
-  template.querySelector('.trigger-type').addEventListener('change', () => updateTriggerVisibility(template));
+  template.querySelector('.trigger-type').addEventListener('change', () => setTriggerDefaults(template));
   template.querySelectorAll('input[type="radio"]').forEach(r => r.addEventListener('change', () => updateTriggerVisibility(template)));
   updateTriggerVisibility(template);
   // Show all remove buttons
