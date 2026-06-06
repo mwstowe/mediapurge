@@ -67,7 +67,12 @@
   <label for="min_episodes" id="lbl-min-episodes">Always keep the latest</label>
   <input type="number" name="min_episodes" id="min_episodes" value="{{ rule.min_episodes if rule else 0 }}" style="max-width:80px;display:inline;"> <span id="lbl-unit">episodes</span>
 
-  <label><input type="checkbox" name="remove_show_when_empty" id="remove_show_when_empty" {{ "checked" if rule and rule.remove_show_when_empty }}> Delete show from manager when all episodes are removed</label>
+  <label for="remove_show_when_empty">When all episodes are removed</label>
+  <select name="remove_show_when_empty" id="remove_show_when_empty">
+    <option value="never" {{ "selected" if not rule or rule.remove_show_when_empty == "never" }}>Keep show in manager (for future episodes)</option>
+    <option value="if_ended" {{ "selected" if rule and rule.remove_show_when_empty == "if_ended" }}>Remove show if it has ended</option>
+    <option value="always" {{ "selected" if rule and rule.remove_show_when_empty == "always" }}>Always remove show from manager</option>
+  </select>
 </fieldset>
 
 <!-- WATCHED BY (movies only) -->

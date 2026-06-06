@@ -123,7 +123,7 @@ def create_app() -> Flask:
                 protect_on_deck="protect_on_deck" in request.form,
                 processing_mode=request.form.get("processing_mode", "episode"),
                 min_episodes=int(request.form.get("min_episodes", 0)),
-                remove_show_when_empty="remove_show_when_empty" in request.form,
+                remove_show_when_empty=request.form.get("remove_show_when_empty", "never"),
                 enabled="enabled" in request.form,
             )
             rule.triggers = _parse_triggers_from_form()
@@ -171,7 +171,7 @@ def create_app() -> Flask:
             rule.protect_on_deck = "protect_on_deck" in request.form
             rule.processing_mode = request.form.get("processing_mode", "episode")
             rule.min_episodes = int(request.form.get("min_episodes", 0))
-            rule.remove_show_when_empty = "remove_show_when_empty" in request.form
+            rule.remove_show_when_empty = request.form.get("remove_show_when_empty", "never")
             rule.enabled = "enabled" in request.form
             # Replace triggers
             rule.triggers.clear()
