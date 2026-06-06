@@ -777,7 +777,7 @@ def _send_confirmation_email(rule: Rule, trigger: Trigger | None, title: str, to
         else:
             lines.append("  • Start watching any episode (playback cancels deletion)")
 
-    lines.append("\nIf you do nothing, it will be deleted after the confirmation period.")
+    lines.append(f"\nIf you do nothing, it will be deleted after {(datetime.now(timezone.utc) + timedelta(days=confirm_days)).strftime('%B %d, %Y')}.")
 
     body = "\n".join(lines)
     subject = f"MediaCleaner: {title} scheduled for deletion"
