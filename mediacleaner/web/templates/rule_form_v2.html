@@ -69,9 +69,9 @@
 
   <label for="remove_show_when_empty">When all episodes are removed</label>
   <select name="remove_show_when_empty" id="remove_show_when_empty">
-    <option value="never" {{ "selected" if not rule or rule.remove_show_when_empty == "never" }}>Keep show in manager (for future episodes)</option>
-    <option value="if_ended" {{ "selected" if rule and rule.remove_show_when_empty == "if_ended" }}>Remove show if it has ended</option>
+    <option value="if_ended" {{ "selected" if not rule or rule.remove_show_when_empty == "if_ended" }}>Remove show from manager if it has ended</option>
     <option value="always" {{ "selected" if rule and rule.remove_show_when_empty == "always" }}>Always remove show from manager</option>
+    <option value="never" {{ "selected" if rule and rule.remove_show_when_empty == "never" }}>Keep show in manager (for future episodes)</option>
   </select>
 </fieldset>
 

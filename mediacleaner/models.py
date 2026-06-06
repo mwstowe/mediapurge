@@ -23,7 +23,7 @@ class Rule(Base):
     protect_on_deck: Mapped[bool] = mapped_column(Boolean, default=True)
     processing_mode: Mapped[str] = mapped_column(String, default='episode')  # episode/season
     min_episodes: Mapped[int] = mapped_column(Integer, default=0)
-    remove_show_when_empty: Mapped[str] = mapped_column(String, default="never")  # never/always/if_ended
+    remove_show_when_empty: Mapped[str] = mapped_column(String, default="if_ended")  # never/always/if_ended
     snoozed_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
