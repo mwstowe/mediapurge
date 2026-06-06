@@ -753,6 +753,14 @@ def _send_confirmation_email(rule: Rule, trigger: Trigger | None, title: str, to
 
     methods = (trigger.confirm_methods if trigger else "snooze").split(",")
     confirm_days = trigger.confirm_days if trigger else 7
+    is_movie = rule.scope == "library" or rule.processing_mode == "episode"
+    # Determine if this is a movie by checking if it has episodes
+    if rule.plex_rating_key:
+        try:
+            item = plex._server().fetchItem(int(rule.plex_rating_key))
+            is_movie = item.type == "movie"
+        except Exception:
+            pass
 
     lines = [f'"{title}" is scheduled for deletion.\n']
     lines.append(f"You have {confirm_days} days to keep it. Options:\n")
@@ -764,7 +772,10 @@ def _send_confirmation_email(rule: Rule, trigger: Trigger | None, title: str, to
     if "mark_unwatched" in methods:
         lines.append(f"  • Mark as unwatched: {base_url}/confirm/unwatched/{token}")
     if "start_watching" in methods:
-        lines.append("  • Start watching any episode (playback cancels deletion)")
+        if is_movie:
+            lines.append("  • Start watching (any playback cancels deletion)")
+        else:
+            lines.append("  • Start watching any episode (playback cancels deletion)")
 
     lines.append("\nIf you do nothing, it will be deleted after the confirmation period.")
 
