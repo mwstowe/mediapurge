@@ -46,7 +46,7 @@
 
 <!-- EPISODE HANDLING (shows only) -->
 <fieldset id="f-episode-opts" style="border:1px solid #333;padding:1rem;border-radius:6px;margin-bottom:1rem;">
-  <legend style="color:#4fc3f7;font-weight:bold;">Episode Handling</legend>
+  <legend style="color:#4fc3f7;font-weight:bold;">Conditions</legend>
 
   <label>Watched By</label>
   <div style="margin:0.3rem 0 0.5rem;">
@@ -58,14 +58,15 @@
 
   <label><input type="checkbox" name="protect_on_deck" {{ "checked" if not rule or rule.protect_on_deck }}> Protect On Deck</label>
 
-  <label>Processing mode</label>
-  <div style="margin:0.3rem 0 0.5rem;">
-    <label style="display:block;margin:0.2rem 0;"><input type="radio" name="processing_mode" value="episode" {{ "checked" if not rule or rule.processing_mode == "episode" }}> Per episode — delete individual episodes as they qualify</label>
-    <label style="display:block;margin:0.2rem 0;"><input type="radio" name="processing_mode" value="season" {{ "checked" if rule and rule.processing_mode == "season" }}> Per season — delete whole seasons when all episodes in the season qualify</label>
-  </div>
+  <div id="f-show-only">
+    <label>Processing mode</label>
+    <div style="margin:0.3rem 0 0.5rem;">
+      <label style="display:block;margin:0.2rem 0;"><input type="radio" name="processing_mode" value="episode" {{ "checked" if not rule or rule.processing_mode == "episode" }}> Per episode — delete individual episodes as they qualify</label>
+      <label style="display:block;margin:0.2rem 0;"><input type="radio" name="processing_mode" value="season" {{ "checked" if rule and rule.processing_mode == "season" }}> Per season — delete whole seasons when all episodes in the season qualify</label>
+    </div>
 
-  <label for="min_episodes" id="lbl-min-episodes">Always keep the latest</label>
-  <input type="number" name="min_episodes" id="min_episodes" value="{{ rule.min_episodes if rule else 0 }}" style="max-width:80px;display:inline;"> <span id="lbl-unit">episodes</span>
+    <label for="min_episodes" id="lbl-min-episodes">Always keep the latest</label>
+    <input type="number" name="min_episodes" id="min_episodes" value="{{ rule.min_episodes if rule else 0 }}" style="max-width:80px;display:inline;"> <span id="lbl-unit">episodes</span>
 
   <label for="remove_show_when_empty">When all episodes are removed</label>
   <select name="remove_show_when_empty" id="remove_show_when_empty">
@@ -73,18 +74,6 @@
     <option value="always" {{ "selected" if rule and rule.remove_show_when_empty == "always" }}>Always remove show from manager</option>
     <option value="never" {{ "selected" if rule and rule.remove_show_when_empty == "never" }}>Keep show in manager (for future episodes)</option>
   </select>
-</fieldset>
-
-<!-- WATCHED BY (movies only) -->
-<fieldset id="f-movie-opts" style="border:1px solid #333;padding:1rem;border-radius:6px;margin-bottom:1rem;">
-  <legend style="color:#4fc3f7;font-weight:bold;">Watch Conditions</legend>
-
-  <label>Watched By</label>
-  <div style="margin:0.3rem 0 0.5rem;">
-    <label style="display:inline;margin-right:1rem;"><input type="checkbox" name="watched_by" value="any" {{ "checked" if (rule and "any" in rule.watched_by) or not rule }}> Any user</label>
-    {% for u in plex_users %}
-    <label style="display:inline;margin-right:1rem;"><input type="checkbox" name="watched_by" value="{{ u.username }}" {{ "checked" if rule and u.username in rule.watched_by }}> {{ u.username }}</label>
-    {% endfor %}
   </div>
 </fieldset>
 
@@ -163,8 +152,8 @@ function updateVisibility() {
 
   document.getElementById('f-library').style.display = scope === 'library' ? '' : 'none';
   document.getElementById('f-ratingkey').style.display = scope !== 'library' ? '' : 'none';
-  document.getElementById('f-episode-opts').style.display = (action === 'delete' && isShow) ? '' : 'none';
-  document.getElementById('f-movie-opts').style.display = (action === 'delete' && isMovie) ? '' : 'none';
+  document.getElementById('f-episode-opts').style.display = (action === 'delete') ? '' : 'none';
+  document.getElementById('f-show-only').style.display = (action === 'delete' && !isMovie) ? '' : 'none';
   document.getElementById('f-triggers').style.display = action === 'delete' ? '' : 'none';
   document.getElementById('lbl-unit').textContent = (mode && mode.value === 'season') ? 'seasons' : 'episodes';
 }
