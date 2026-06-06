@@ -771,6 +771,15 @@ def _send_confirmation_email(rule: Rule, trigger: Trigger | None, title: str, to
     body = "\n".join(lines)
     subject = f"MediaCleaner: {title} scheduled for deletion"
     recipient = trigger.confirm_email if trigger and trigger.confirm_email else None
+    if not recipient:
+        # Resolve from watched_by -> user_emails config
+        user_emails = cfg.get("plex", {}).get("user_emails", {})
+        users = [u.strip() for u in rule.watched_by.split(",") if u.strip() != "any"]
+        recipients = [user_emails[u] for u in users if u in user_emails]
+        if recipients:
+            for r in recipients:
+                notify.send_to(subject, body, r)
+            return
     if recipient:
         notify.send_to(subject, body, recipient)
     else:
