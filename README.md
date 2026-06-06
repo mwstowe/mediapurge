@@ -180,19 +180,32 @@ maintenance:
 
 ## Installation
 
-Requirements (Gentoo):
+### Dependencies
+
+Gentoo:
 ```bash
 sudo emerge -av flask sqlalchemy pyyaml requests bcrypt PlexAPI
 ```
 
-Deploy:
+Other systems (pip):
+```bash
+pip install flask sqlalchemy pyyaml requests bcrypt plexapi
+```
+
+### Deploy
+
 ```bash
 sudo mkdir -p /opt/mediacleaner
-sudo rsync -av --exclude config.yaml --exclude '*.db' --exclude .git \
-    /path/to/mediacleaner/ /opt/mediacleaner/
+sudo git clone https://github.com/mwstowe/mediacleaner.git /opt/mediacleaner
 sudo chown -R sabnzbd:sabnzbd /opt/mediacleaner
 cp /opt/mediacleaner/config.yaml.example /opt/mediacleaner/config.yaml
 # Edit config.yaml with your credentials
+```
+
+To update:
+```bash
+cd /opt/mediacleaner && sudo -u sabnzbd git pull
+sudo systemctl restart mediacleaner
 ```
 
 Create the systemd service at `/etc/systemd/system/mediacleaner.service`:
