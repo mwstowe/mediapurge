@@ -187,10 +187,31 @@ sudo emerge -av flask sqlalchemy pyyaml requests bcrypt PlexAPI
 
 Deploy:
 ```bash
-./deploy.sh
+sudo mkdir -p /opt/mediacleaner
+sudo rsync -av --exclude config.yaml --exclude '*.db' --exclude .git \
+    /path/to/mediacleaner/ /opt/mediacleaner/
+sudo chown -R sabnzbd:sabnzbd /opt/mediacleaner
+cp /opt/mediacleaner/config.yaml.example /opt/mediacleaner/config.yaml
+# Edit config.yaml with your credentials
 ```
 
-This rsyncs the code to `/opt/mediacleaner` (owned by `sabnzbd:sabnzbd`), preserving `config.yaml` and the database.
+Create the systemd service at `/etc/systemd/system/mediacleaner.service`:
+```ini
+[Unit]
+Description=MediaCleaner Web UI
+After=network.target plex-media-server.service
+
+[Service]
+Type=simple
+User=sabnzbd
+Group=sabnzbd
+WorkingDirectory=/opt/mediacleaner
+ExecStart=/usr/bin/python3.13 -m mediacleaner.web.app
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
 
 ## Running
 
