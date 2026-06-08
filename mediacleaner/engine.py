@@ -610,7 +610,12 @@ def execute_deletions(report: EngineReport):
 
             log.info(f"Deleted: {result.title} via {result.manager}")
             if result.rule_id and not is_episode:
-                rules_to_delete.add(result.rule_id)
+                # Only retire show-scoped rules (not library rules which apply broadly)
+                r_session = get_session()
+                r_check = r_session.get(Rule, result.rule_id)
+                if r_check and r_check.scope == "show":
+                    rules_to_delete.add(result.rule_id)
+                r_session.close()
         except Exception as e:
             log.error(f"Failed to delete {result.title}: {e}")
             report.errors.append(f"Delete failed for {result.title}: {e}")
