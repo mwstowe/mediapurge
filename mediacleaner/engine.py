@@ -631,6 +631,10 @@ def execute_deletions(report: EngineReport):
         except Exception:
             pass
 
+    # Remove shows from manager when all episodes are gone
+    if any(r.action == "delete" for r in report.results):
+        _remove_empty_shows(report)
+
     if any(r.action == "delete" for r in report.results):
         try:
             for lib_name, _ in plex.get_libraries():
@@ -638,6 +642,73 @@ def execute_deletions(report: EngineReport):
             log.info("Triggered Plex library scan")
         except Exception as e:
             log.warning(f"Failed to trigger Plex scan: {e}")
+
+
+def _remove_empty_shows(report: EngineReport):
+    """Remove shows from their managing app when all episodes have been deleted."""
+    session = get_session()
+    # Find show-scoped rules that want removal when empty
+    rules = session.query(Rule).filter(
+        Rule.scope == "show",
+        Rule.remove_show_when_empty != "never",
+        Rule.enabled == True,
+    ).all()
+
+    for rule in rules:
+        if not rule.plex_rating_key:
+            continue
+        # Check if the show still has episodes in Plex
+        try:
+            server = plex._server()
+            item = server.fetchItem(int(rule.plex_rating_key))
+            eps = item.episodes() if hasattr(item, "episodes") else []
+            if eps:
+                continue  # Still has episodes, skip
+        except Exception:
+            # Item not found in Plex = already gone
+            pass
+
+        # Check if_ended condition
+        if rule.remove_show_when_empty == "if_ended":
+            mgr_info = plex.get_manager_info()
+            paths = plex.get_file_paths(item) if 'item' in dir() else []
+            ended = False
+            for p in paths:
+                info = mgr_info.get(p.rstrip("/"))
+                if info and info.get("ended"):
+                    ended = True
+                    break
+            if not ended:
+                continue  # Show hasn't ended, keep in manager
+
+        # Remove from manager
+        manager, manager_id = find_manager_by_rule(rule)
+        try:
+            if manager == "sonarr" and manager_id:
+                sonarr.delete_series(int(manager_id), delete_files=True)
+                log.info(f"Removed show from Sonarr: {rule.media_title}")
+            elif manager == "medusa" and manager_id:
+                medusa.delete_show(str(manager_id), remove_files=True)
+                log.info(f"Removed show from Medusa: {rule.media_title}")
+            # Retire the rule
+            session.delete(rule)
+        except Exception as e:
+            log.warning(f"Failed to remove {rule.media_title} from manager: {e}")
+
+    session.commit()
+    session.close()
+
+
+def find_manager_by_rule(rule: Rule):
+    """Find the manager for a rule's target by checking managed_media."""
+    session = get_session()
+    managed = session.execute(select(ManagedMedia)).scalars().all()
+    session.close()
+    # Try to match by title since the item may no longer be in Plex
+    for m in managed:
+        if m.title and rule.media_title and m.title.lower() == rule.media_title.lower():
+            return m.manager, m.manager_id
+    return "none", None
 
 
 def _delete_direct(result: EvalResult):
