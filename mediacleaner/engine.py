@@ -615,6 +615,16 @@ def execute_deletions(report: EngineReport):
             log.error(f"Failed to delete {result.title}: {e}")
             report.errors.append(f"Delete failed for {result.title}: {e}")
 
+    for slug in medusa_shows_refreshed:
+        try:
+            medusa.refresh_show(slug)
+        except Exception:
+            pass
+
+    # Remove shows from manager when all episodes are gone (before retiring rules)
+    if any(r.action == "delete" for r in report.results):
+        _remove_empty_shows(report)
+
     if rules_to_delete:
         session = get_session()
         for rule_id in rules_to_delete:
@@ -624,16 +634,6 @@ def execute_deletions(report: EngineReport):
                 session.delete(rule)
         session.commit()
         session.close()
-
-    for slug in medusa_shows_refreshed:
-        try:
-            medusa.refresh_show(slug)
-        except Exception:
-            pass
-
-    # Remove shows from manager when all episodes are gone
-    if any(r.action == "delete" for r in report.results):
-        _remove_empty_shows(report)
 
     if any(r.action == "delete" for r in report.results):
         try:
