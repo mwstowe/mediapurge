@@ -71,6 +71,7 @@ def _migrate():
 
     # PendingAction migrations
     _add_col("pending_actions", "trigger_id", "INTEGER", "NULL")
+    _add_col("pending_actions", "notified_to", "VARCHAR", "NULL")
 
     conn.commit()
     conn.close()

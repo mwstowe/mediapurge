@@ -59,6 +59,7 @@ class PendingAction(Base):
     token: Mapped[str] = mapped_column(String, unique=True)
     confirm_method: Mapped[str] = mapped_column(String)
     notified_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    notified_to: Mapped[str | None] = mapped_column(String, nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     confirmed: Mapped[bool] = mapped_column(Boolean, default=False)
     cancelled: Mapped[bool] = mapped_column(Boolean, default=False)

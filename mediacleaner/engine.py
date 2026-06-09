@@ -818,7 +818,13 @@ def _handle_pending_confirm(session, rule: Rule, trigger: Trigger | None, rating
     ))
     session.flush()
 
-    _send_confirmation_email(rule, trigger, title, token)
+    recipient = _send_confirmation_email(rule, trigger, title, token)
+    # Store where we sent the notification
+    pa = session.execute(
+        select(PendingAction).where(PendingAction.token == token)
+    ).scalar_one_or_none()
+    if pa and recipient:
+        pa.notified_to = recipient
 
 
 def _send_confirmation_email(rule: Rule, trigger: Trigger | None, title: str, token: str):
@@ -866,11 +872,26 @@ def _send_confirmation_email(rule: Rule, trigger: Trigger | None, title: str, to
         if recipients:
             for r in recipients:
                 notify.send_to(subject, body, r)
-            return
+            return recipients[0]
     if recipient:
         notify.send_to(subject, body, recipient)
+        return recipient
     else:
         notify.send(subject, body)
+        return None
+
+
+def _send_kept_notification(pa: PendingAction, action_taken: str):
+    """Notify the user that their media will NOT be deleted."""
+    if not pa.notified_to:
+        return
+    subject = f"MediaCleaner: {pa.media_title} — kept"
+    body = (
+        f'Good news — "{pa.media_title}" will NOT be deleted.\n\n'
+        f"Action taken: {action_taken}\n\n"
+        f"The scheduled deletion has been cancelled."
+    )
+    notify.send_to(subject, body, pa.notified_to)
 
 
 def process_pending_actions():
@@ -894,6 +915,7 @@ def process_pending_actions():
                 if trigger:
                     trigger.snoozed_until = datetime.now(timezone.utc) + timedelta(days=trigger.confirm_days)
             log.info(f"Pending deletion cancelled by user activity: {pa.media_title}")
+            _send_kept_notification(pa, "user activity detected (started watching)")
             session.add(ActionLog(
                 media_title=pa.media_title, plex_rating_key=pa.plex_rating_key,
                 rule_id=pa.rule_id, action_taken="confirm_cancelled",
@@ -992,6 +1014,9 @@ def cancel_pending_by_token(token: str, action: str = "snooze") -> bool:
             trigger = session.get(Trigger, pa.trigger_id)
             if trigger:
                 trigger.snoozed_until = datetime.now(timezone.utc) + timedelta(days=trigger.confirm_days)
+
+    actions_desc = {"snooze": "snoozed (timer reset)", "disable": "trigger disabled permanently", "unwatched": "marked as unwatched"}
+    _send_kept_notification(pa, actions_desc.get(action, action))
 
     session.commit()
     session.close()
