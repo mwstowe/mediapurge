@@ -1028,46 +1028,52 @@ def _move_medusa_to_sonarr(result: EvalResult, dest: str):
 
 
 def _fix_unmatched_episodes(series_id: int, file_map: dict):
-    """Use Sonarr's manual import to assign files that weren't auto-matched."""
+    """Use Sonarr's manual import to assign ALL files using the Medusa episode mapping.
+    This bypasses Sonarr's filename parser entirely for reliability."""
     if not file_map:
         return
     import time
-    sonarr_eps = sonarr.get_episodes(series_id)
-    # Build episode lookup: (season, episode) -> episode_id
-    ep_ids = {(e["seasonNumber"], e["episodeNumber"]): e["id"] for e in sonarr_eps}
-    # Check which episodes are missing files
-    missing = [e for e in sonarr_eps if not e.get("hasFile") and e.get("monitored")]
-    if not missing:
-        return
-    # Get Sonarr's manual import view to find unmatched files
     from mediapurge.config import get_config
     import requests
+
+    sonarr_eps = sonarr.get_episodes(series_id)
+    ep_ids = {(e["seasonNumber"], e["episodeNumber"]): e["id"] for e in sonarr_eps}
+
+    # Get all files Sonarr sees on disk
     cfg = get_config()["sonarr"]
     headers = {"X-Api-Key": cfg["api_key"]}
     r = requests.get(f"{cfg['url']}/api/v3/manualimport?seriesId={series_id}", headers=headers)
     if r.status_code != 200:
         return
+
+    # Get quality/language reference from any already-imported file
+    ef = requests.get(f"{cfg['url']}/api/v3/episodefile?seriesId={series_id}", headers=headers).json()
+    ref_quality = ef[0]["quality"] if ef else {"quality": {"id": 4}, "revision": {"version": 1}}
+    ref_languages = ef[0].get("languages", [{"id": 1, "name": "English"}]) if ef else [{"id": 1, "name": "English"}]
+
     imports = []
     for item in r.json():
-        if item.get("episodes"):
-            continue  # Already matched
         fname = item.get("path", "").split("/")[-1]
         if fname in file_map:
             season, episode = file_map[fname]
             ep_id = ep_ids.get((season, episode))
             if ep_id:
+                # Skip if Sonarr already matched this file correctly
+                matched_eps = item.get("episodes", [])
+                if matched_eps and matched_eps[0].get("episodeNumber") == episode:
+                    continue
                 imports.append({
                     "path": item["path"],
                     "seriesId": series_id,
                     "seasonNumber": season,
                     "episodeIds": [ep_id],
-                    "quality": item.get("quality", {"quality": {"id": 4}, "revision": {"version": 1}}),
-                    "languages": item.get("languages", [{"id": 1, "name": "English"}]),
+                    "quality": item.get("quality") or ref_quality,
+                    "languages": item.get("languages") or ref_languages,
                 })
     if imports:
         try:
             sonarr.manual_import(series_id, imports)
-            time.sleep(2)
+            time.sleep(3)
         except Exception:
             pass
 
