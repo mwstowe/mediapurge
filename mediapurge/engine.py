@@ -679,6 +679,7 @@ def execute_deletions(report: EngineReport):
 
 def execute_moves(report: EngineReport):
     """Perform moves for items marked 'move' in the report."""
+    rules_to_retire = set()
     for result in report.results:
         if result.action != "move" or not result.move_to:
             continue
@@ -687,9 +688,27 @@ def execute_moves(report: EngineReport):
             dest = result.move_to.rstrip("/")
             _do_move(result, dest)
             log.info(f"Moved: {result.title} to {dest} via {result.manager}")
+            # Retire show-scoped move rules (not library-scoped)
+            if result.rule_id:
+                s = get_session()
+                r = s.get(Rule, result.rule_id)
+                if r and r.scope == "show":
+                    rules_to_retire.add(result.rule_id)
+                s.close()
         except Exception as e:
             log.error(f"Failed to move {result.title}: {e}")
             report.errors.append(f"Move failed for {result.title}: {e}")
+
+    # Retire completed move rules
+    if rules_to_retire:
+        s = get_session()
+        for rule_id in rules_to_retire:
+            rule = s.get(Rule, rule_id)
+            if rule:
+                log.info(f"Retiring move rule #{rule.id} ({rule.media_title}) — move completed")
+                s.delete(rule)
+        s.commit()
+        s.close()
 
     # Scan Plex libraries to reflect moves
     if any(r.action == "move" for r in report.results):
