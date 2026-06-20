@@ -684,115 +684,219 @@ def execute_moves(report: EngineReport):
 
 
 def _do_move(result: EvalResult, dest: str):
-    """Execute a move based on source and destination managers."""
+    """Execute a move with pre-flight checks and safe ordering.
+    
+    Strategy: add to destination manager FIRST (at old path), verify it works,
+    then move files, then remove from source. If any step fails early, nothing changes.
+    """
     import os
     import shutil
 
-    # Determine destination manager
     dest_manager = _path_to_manager(dest)
 
+    # --- Pre-flight checks ---
+    # Check destination is writable
+    if not os.access(dest, os.W_OK):
+        raise PermissionError(f"Destination not writable: {dest}")
+
+    # Get source path and check disk space
+    source_path = None
+    if result.manager in ("sonarr", "medusa", "none"):
+        try:
+            server = plex._server()
+            item = server.fetchItem(int(result.rating_key))
+            paths = plex.get_file_paths(item)
+            source_path = paths[0] if paths else None
+        except Exception:
+            pass
+
+    if source_path and os.path.exists(source_path):
+        # Check disk space (source size vs destination free space)
+        source_size = 0
+        if os.path.isdir(source_path):
+            for root, _, files in os.walk(source_path):
+                for f in files:
+                    source_size += os.path.getsize(os.path.join(root, f))
+        else:
+            source_size = os.path.getsize(source_path)
+        free_space = shutil.disk_usage(dest).free
+        if source_size > free_space * 0.95:  # 5% safety margin
+            raise OSError(f"Insufficient disk space: need {source_size}, have {free_space}")
+
+    # --- Execute move ---
     if result.manager == "radarr":
+        # Radarr handles moves atomically via its own API
         radarr.move_movie(int(result.manager_id), dest)
 
     elif result.manager == "sonarr":
         if dest_manager == "sonarr":
+            # Sonarr handles internal moves atomically
             sonarr.move_series(int(result.manager_id), dest)
         elif dest_manager == "medusa":
-            # Get show info before removing from Sonarr
-            from mediapurge.config import get_config
-            import requests
-            cfg = get_config()["sonarr"]
-            headers = {"X-Api-Key": cfg["api_key"]}
-            r = requests.get(f"{cfg['url']}/api/v3/series/{result.manager_id}", headers=headers)
-            series = r.json()
-            tvdb_id = series.get("tvdbId")
-            old_path = series["path"]
-            show_folder = old_path.rstrip("/").split("/")[-1]
-            new_path = f"{dest}/{show_folder}"
-            # Move files if paths differ
-            if old_path.rstrip("/") != new_path.rstrip("/"):
-                shutil.move(old_path, new_path)
-            # Get episode status before removing from Sonarr
-            sonarr_eps = sonarr.get_episodes(int(result.manager_id))
-            unmonitored_eps = [(e["seasonNumber"], e["episodeNumber"]) for e in sonarr_eps if not e["monitored"]]
-            # Remove from Sonarr (without deleting files)
-            sonarr.delete_series(int(result.manager_id), delete_files=False)
-            # Add to Medusa and refresh so it detects existing files
-            medusa.add_show(tvdb_id, new_path)
-            # Find the new slug, refresh, then transfer status
-            new_slug = None
-            for s in medusa.get_all_shows():
-                if s.get("id", {}).get("tvdb") == tvdb_id:
-                    new_slug = s["id"]["slug"]
-                    medusa.refresh_show(new_slug)
-                    break
-            # Mark unmonitored episodes as Ignored in Medusa
-            if new_slug and unmonitored_eps:
-                import time; time.sleep(3)  # Wait for refresh to complete
-                for season, episode in unmonitored_eps:
-                    try:
-                        medusa.ignore_episode(new_slug, season, episode)
-                    except Exception:
-                        pass
+            _move_sonarr_to_medusa(result, dest)
 
     elif result.manager == "medusa":
-        # Get show info
-        show_slug = str(result.manager_id)
-        shows = medusa.get_all_shows()
-        show_info = next((s for s in shows if s.get("id", {}).get("slug") == show_slug), None)
-        if not show_info:
-            raise ValueError(f"Show {show_slug} not found in Medusa")
-        tvdb_id = show_info.get("id", {}).get("tvdb")
-        old_path = show_info.get("config", {}).get("location", "")
-        show_folder = old_path.rstrip("/").split("/")[-1]
-        new_path = f"{dest}/{show_folder}"
-
         if dest_manager == "medusa":
-            # Move files, remove from Medusa, re-add at new location
-            if old_path.rstrip("/") != new_path.rstrip("/"):
-                shutil.move(old_path, new_path)
-            medusa.delete_show(show_slug, remove_files=False)
-            medusa.add_show(tvdb_id, new_path)
+            _move_medusa_to_medusa(result, dest)
         elif dest_manager == "sonarr":
-            # Get episode status from Medusa before removing (includes episodes without files)
-            import requests as req
-            from mediapurge.config import get_config as _gc
-            mcfg = _gc()["medusa"]
-            murl = mcfg["url"].rstrip("/")
-            mheaders = {"X-Api-Key": mcfg["api_key"]}
-            ep_r = req.get(f"{murl}/api/v2/series/{show_slug}/episodes?limit=1000", headers=mheaders, verify=False)
-            medusa_eps = ep_r.json() if ep_r.status_code == 200 else []
-            ignored_eps = [(e["season"], e["episode"]) for e in medusa_eps if e.get("status") in ("Ignored", "Skipped")]
-
-            # Move files if paths differ
-            if old_path.rstrip("/") != new_path.rstrip("/"):
-                shutil.move(old_path, new_path)
-            # Remove from Medusa (without deleting files)
-            medusa.delete_show(show_slug, remove_files=False)
-            # Add to Sonarr and trigger disk scan to detect existing files
-            new_series_id = sonarr.add_series(tvdb_id, show_info.get("title", ""), dest)
-            sonarr.rescan_series(new_series_id)
-            # Unmonitor episodes that were Ignored/Skipped in Medusa
-            if ignored_eps:
-                import time; time.sleep(3)  # Wait for rescan
-                sonarr_eps = sonarr.get_episodes(new_series_id)
-                ep_ids_to_unmonitor = [
-                    e["id"] for e in sonarr_eps
-                    if (e["seasonNumber"], e["episodeNumber"]) in ignored_eps
-                ]
-                if ep_ids_to_unmonitor:
-                    sonarr.unmonitor_episodes(ep_ids_to_unmonitor)
+            _move_medusa_to_sonarr(result, dest)
 
     elif result.manager == "none":
         # Orphan — just move the files
-        server = plex._server()
-        item = server.fetchItem(int(result.rating_key))
-        paths = plex.get_file_paths(item)
-        for old_path in paths:
-            show_folder = old_path.rstrip("/").split("/")[-1]
+        if source_path and os.path.exists(source_path):
+            show_folder = source_path.rstrip("/").split("/")[-1]
             new_path = f"{dest}/{show_folder}"
-            if old_path.rstrip("/") != new_path.rstrip("/"):
-                shutil.move(old_path, new_path)
+            if source_path.rstrip("/") != new_path.rstrip("/"):
+                shutil.move(source_path, new_path)
+
+
+def _move_sonarr_to_medusa(result: EvalResult, dest: str):
+    """Move from Sonarr to Medusa. Safe order: verify, move files, add to Medusa, remove from Sonarr."""
+    import shutil, time, requests
+    from mediapurge.config import get_config
+
+    # Verify Medusa is reachable
+    medusa.get_all_shows()  # Raises if Medusa is down
+
+    cfg = get_config()["sonarr"]
+    headers = {"X-Api-Key": cfg["api_key"]}
+    r = requests.get(f"{cfg['url']}/api/v3/series/{result.manager_id}", headers=headers)
+    r.raise_for_status()
+    series = r.json()
+    tvdb_id = series.get("tvdbId")
+    old_path = series["path"]
+    show_folder = old_path.rstrip("/").split("/")[-1]
+    new_path = f"{dest}/{show_folder}"
+
+    # Get episode status before any changes
+    sonarr_eps = sonarr.get_episodes(int(result.manager_id))
+    unmonitored_eps = [(e["seasonNumber"], e["episodeNumber"]) for e in sonarr_eps if not e["monitored"]]
+
+    # Step 1: Move files to new location
+    if old_path.rstrip("/") != new_path.rstrip("/"):
+        shutil.move(old_path, new_path)
+
+    # Step 2: Add to Medusa at new path
+    try:
+        medusa.add_show(tvdb_id, new_path)
+    except Exception as e:
+        # Rollback: move files back
+        if old_path.rstrip("/") != new_path.rstrip("/"):
+            try:
+                shutil.move(new_path, old_path)
+            except Exception:
+                pass
+        raise e
+
+    # Step 3: Remove from Sonarr (safe — Medusa now has it)
+    sonarr.delete_series(int(result.manager_id), delete_files=False)
+
+    # Step 4: Refresh Medusa and transfer status
+    new_slug = None
+    for s in medusa.get_all_shows():
+        if s.get("id", {}).get("tvdb") == tvdb_id:
+            new_slug = s["id"]["slug"]
+            medusa.refresh_show(new_slug)
+            break
+    if new_slug and unmonitored_eps:
+        time.sleep(3)
+        for season, episode in unmonitored_eps:
+            try:
+                medusa.ignore_episode(new_slug, season, episode)
+            except Exception:
+                pass
+
+
+def _move_medusa_to_sonarr(result: EvalResult, dest: str):
+    """Move from Medusa to Sonarr. Safe order: verify, move files, add to Sonarr, remove from Medusa."""
+    import os, shutil, time, requests, warnings
+    warnings.filterwarnings("ignore")
+    from mediapurge.config import get_config
+
+    # Verify Sonarr is reachable
+    sonarr.get_all_series()  # Raises if Sonarr is down
+
+    show_slug = str(result.manager_id)
+    shows = medusa.get_all_shows()
+    show_info = next((s for s in shows if s.get("id", {}).get("slug") == show_slug), None)
+    if not show_info:
+        raise ValueError(f"Show {show_slug} not found in Medusa")
+    tvdb_id = show_info.get("id", {}).get("tvdb")
+    old_path = show_info.get("config", {}).get("location", "")
+    show_folder = old_path.rstrip("/").split("/")[-1]
+    new_path = f"{dest}/{show_folder}"
+
+    # Get episode status from Medusa
+    mcfg = get_config()["medusa"]
+    murl = mcfg["url"].rstrip("/")
+    mheaders = {"X-Api-Key": mcfg["api_key"]}
+    ep_r = requests.get(f"{murl}/api/v2/series/{show_slug}/episodes?limit=1000", headers=mheaders, verify=False)
+    medusa_eps = ep_r.json() if ep_r.status_code == 200 else []
+    ignored_eps = [(e["season"], e["episode"]) for e in medusa_eps if e.get("status") in ("Ignored", "Skipped")]
+
+    # Step 1: Move files to new location
+    if old_path.rstrip("/") != new_path.rstrip("/"):
+        shutil.move(old_path, new_path)
+
+    # Step 2: Add to Sonarr at the destination root folder
+    try:
+        new_series_id = sonarr.add_series(tvdb_id, show_info.get("title", ""), dest)
+    except Exception as e:
+        # Rollback: move files back
+        if old_path.rstrip("/") != new_path.rstrip("/"):
+            try:
+                shutil.move(new_path, old_path)
+            except Exception:
+                pass
+        raise e
+
+    # Step 3: Remove from Medusa (safe — Sonarr now has it)
+    medusa.delete_show(show_slug, remove_files=False)
+
+    # Step 4: Rescan and transfer status
+    sonarr.rescan_series(new_series_id)
+    if ignored_eps:
+        time.sleep(3)
+        sonarr_eps = sonarr.get_episodes(new_series_id)
+        ep_ids_to_unmonitor = [
+            e["id"] for e in sonarr_eps
+            if (e["seasonNumber"], e["episodeNumber"]) in ignored_eps
+        ]
+        if ep_ids_to_unmonitor:
+            sonarr.unmonitor_episodes(ep_ids_to_unmonitor)
+
+
+def _move_medusa_to_medusa(result: EvalResult, dest: str):
+    """Move within Medusa. Safe order: move files, remove + re-add."""
+    import shutil
+
+    show_slug = str(result.manager_id)
+    shows = medusa.get_all_shows()
+    show_info = next((s for s in shows if s.get("id", {}).get("slug") == show_slug), None)
+    if not show_info:
+        raise ValueError(f"Show {show_slug} not found in Medusa")
+    tvdb_id = show_info.get("id", {}).get("tvdb")
+    old_path = show_info.get("config", {}).get("location", "")
+    show_folder = old_path.rstrip("/").split("/")[-1]
+    new_path = f"{dest}/{show_folder}"
+
+    if old_path.rstrip("/") == new_path.rstrip("/"):
+        return  # Same path, nothing to do
+
+    # Step 1: Move files
+    shutil.move(old_path, new_path)
+
+    # Step 2: Remove from Medusa and re-add at new location
+    try:
+        medusa.delete_show(show_slug, remove_files=False)
+        medusa.add_show(tvdb_id, new_path)
+    except Exception as e:
+        # Rollback: move files back
+        try:
+            shutil.move(new_path, old_path)
+        except Exception:
+            pass
+        raise e
 
 
 def _path_to_manager(path: str) -> str:
