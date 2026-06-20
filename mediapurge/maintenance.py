@@ -4,18 +4,18 @@ import argparse
 import logging
 import sys
 
-from mediacleaner.config import load_config, get_config
-from mediacleaner.db import init_db
-from mediacleaner.engine import EngineReport, execute_deletions, run_evaluation, sync_managed_media, process_pending_actions, get_confirmed_deletions, run_orphan_scan
-from mediacleaner import notify
+from mediapurge.config import load_config, get_config
+from mediapurge.db import init_db
+from mediapurge.engine import EngineReport, execute_deletions, run_evaluation, sync_managed_media, process_pending_actions, get_confirmed_deletions, run_orphan_scan
+from mediapurge import notify
 
-log = logging.getLogger("mediacleaner")
+log = logging.getLogger("mediapurge")
 
 
 def _format_report(report: EngineReport, dry_run: bool) -> str:
     lines = []
     mode = "DRY RUN" if dry_run else "LIVE"
-    lines.append(f"=== MediaCleaner Maintenance [{mode}] ===\n")
+    lines.append(f"=== MediaPurge Maintenance [{mode}] ===\n")
 
     deletions = [r for r in report.results if r.action == "delete"]
     if deletions:
@@ -39,7 +39,7 @@ def _format_report(report: EngineReport, dry_run: bool) -> str:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="MediaCleaner maintenance job")
+    parser = argparse.ArgumentParser(description="MediaPurge maintenance job")
     parser.add_argument("--dry-run", action="store_true", default=None)
     parser.add_argument("--config", type=str, default=None)
     args = parser.parse_args()
@@ -94,7 +94,7 @@ def main():
     log.info(summary)
 
     # Step 6: Notify
-    notify.send("MediaCleaner Report", summary)
+    notify.send("MediaPurge Report", summary)
 
     log.info("Maintenance complete.")
 

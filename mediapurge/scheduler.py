@@ -15,7 +15,7 @@ def start_scheduler(app):
     if _thread is not None:
         return
 
-    from mediacleaner.config import get_config
+    from mediapurge.config import get_config
     cfg = get_config()
     schedule_time = cfg.get("maintenance", {}).get("schedule", "03:00")
 
@@ -41,11 +41,11 @@ def _run_loop(app, schedule_time):
 
 
 def _run_maintenance():
-    from mediacleaner.config import get_config
-    from mediacleaner.engine import (
+    from mediapurge.config import get_config
+    from mediapurge.engine import (
         execute_deletions, process_pending_actions, run_evaluation, sync_managed_media,
     )
-    from mediacleaner import notify
+    from mediapurge import notify
 
     cfg = get_config()
     dry_run = cfg.get("maintenance", {}).get("dry_run", True)
@@ -64,7 +64,7 @@ def _run_maintenance():
 
         lines = []
         mode = "DRY RUN" if dry_run else "LIVE"
-        lines.append(f"MediaCleaner Maintenance [{mode}]\n")
+        lines.append(f"MediaPurge Maintenance [{mode}]\n")
 
         if deletions:
             def _human(b):
@@ -94,6 +94,6 @@ def _run_maintenance():
 
         # Only send email if there's something to report
         if deletions or pending or report.errors:
-            notify.send("MediaCleaner Maintenance", summary)
+            notify.send("MediaPurge Maintenance", summary)
     except Exception as e:
         log.error(f"Maintenance failed: {e}")

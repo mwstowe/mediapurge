@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-from mediacleaner.config import get_config
+from mediapurge.config import get_config
 
 
 class Base(DeclarativeBase):
@@ -16,7 +16,7 @@ def get_engine():
     global _engine
     if _engine is None:
         cfg = get_config()
-        db_path = cfg.get("database", {}).get("path", "mediacleaner.db")
+        db_path = cfg.get("database", {}).get("path", "mediapurge.db")
         _engine = create_engine(f"sqlite:///{db_path}", echo=False)
     return _engine
 
@@ -29,7 +29,7 @@ def get_session() -> Session:
 
 
 def init_db():
-    from mediacleaner import models  # noqa: F401
+    from mediapurge import models  # noqa: F401
 
     Base.metadata.create_all(get_engine())
     _migrate()
@@ -39,7 +39,7 @@ def _migrate():
     """Add missing columns/tables to existing database."""
     import sqlite3
     cfg = get_config()
-    db_path = cfg.get("database", {}).get("path", "mediacleaner.db")
+    db_path = cfg.get("database", {}).get("path", "mediapurge.db")
     conn = sqlite3.connect(db_path)
 
     def _add_col(table, col, coltype, default=None):

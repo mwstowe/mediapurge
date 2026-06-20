@@ -1,5 +1,5 @@
 [project]
-name = "mediacleaner"
+name = "mediapurge"
 version = "0.1.0"
 description = "Media lifecycle management with rule engine, daily maintenance, and web UI"
 requires-python = ">=3.11"
@@ -19,8 +19,8 @@ dev = [
 ]
 
 [project.scripts]
-mediacleaner-web = "mediacleaner.web.app:main"
-mediacleaner-maintenance = "mediacleaner.maintenance:main"
+mediapurge-web = "mediapurge.web.app:main"
+mediapurge-maintenance = "mediapurge.maintenance:main"
 
 [tool.ruff]
 line-length = 100

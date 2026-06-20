@@ -1,4 +1,4 @@
-# MediaCleaner
+# MediaPurge
 
 Automated media lifecycle management for Plex. Manages deletion of watched media across Plex, Sonarr, Radarr, Medusa, and Ombi based on configurable rules.
 
@@ -102,7 +102,7 @@ ombi:
 
 #### User Tokens
 
-`user_tokens` provides per-user Plex tokens so MediaCleaner can check watch status for individual users. Without a token for a user, it falls back to the admin token and sees the admin's watch status — which gives incorrect results.
+`user_tokens` provides per-user Plex tokens so MediaPurge can check watch status for individual users. Without a token for a user, it falls back to the admin token and sees the admin's watch status — which gives incorrect results.
 
 The admin/server owner doesn't need an entry — the main `token` is used for them.
 
@@ -114,7 +114,7 @@ To get a shared user's token:
    ```bash
    curl -s 'https://plex.tv/users/sign_in.json' \
      -X POST \
-     -H 'X-Plex-Client-Identifier: mediacleaner' \
+     -H 'X-Plex-Client-Identifier: mediapurge' \
      -d 'user[login]=USERNAME&user[password]=PASSWORD' | python3 -c "import sys,json;print(json.load(sys.stdin)['user']['authToken'])"
    ```
 4. For managed (home) users without their own Plex account, get the token from your admin account:
@@ -133,10 +133,10 @@ To get a shared user's token:
 web:
   secret_key: "RANDOM_SECRET"
   admin_password: "$2b$12$..."  # bcrypt hash
-  base_url: "https://mediacleaner.example.com:9393"
+  base_url: "https://mediapurge.example.com:9393"
   port: 9393
-  ssl_cert: /opt/mediacleaner/ssl/fullchain.pem
-  ssl_key: /opt/mediacleaner/ssl/privkey.pem
+  ssl_cert: /opt/mediapurge/ssl/fullchain.pem
+  ssl_key: /opt/mediapurge/ssl/privkey.pem
 ```
 
 Generate a password hash:
@@ -151,7 +151,7 @@ notifications:
   enabled: true
   method: email
   email:
-    from: mediacleaner@example.com
+    from: mediapurge@example.com
     admin: admin@example.com
     smtp_host: smtp.example.com
     smtp_port: 587
@@ -169,7 +169,7 @@ notifications:
 maintenance:
   dry_run: false
   schedule: "03:00"
-  log_file: /var/log/mediacleaner.log
+  log_file: /var/log/mediapurge.log
   excluded_libraries:
     - "3D Movies"
 ```
@@ -195,31 +195,31 @@ pip install flask sqlalchemy pyyaml requests bcrypt plexapi
 ### Deploy
 
 ```bash
-sudo mkdir -p /opt/mediacleaner
-sudo git clone https://github.com/mwstowe/mediacleaner.git /opt/mediacleaner
-sudo chown -R sabnzbd:sabnzbd /opt/mediacleaner
-cp /opt/mediacleaner/config.yaml.example /opt/mediacleaner/config.yaml
+sudo mkdir -p /opt/mediapurge
+sudo git clone https://github.com/mwstowe/mediapurge.git /opt/mediapurge
+sudo chown -R sabnzbd:sabnzbd /opt/mediapurge
+cp /opt/mediapurge/config.yaml.example /opt/mediapurge/config.yaml
 # Edit config.yaml with your credentials
 ```
 
 To update:
 ```bash
-cd /opt/mediacleaner && sudo -u sabnzbd git pull
-sudo systemctl restart mediacleaner
+cd /opt/mediapurge && sudo -u sabnzbd git pull
+sudo systemctl restart mediapurge
 ```
 
-Create the systemd service at `/etc/systemd/system/mediacleaner.service`:
+Create the systemd service at `/etc/systemd/system/mediapurge.service`:
 ```ini
 [Unit]
-Description=MediaCleaner Web UI
+Description=MediaPurge Web UI
 After=network.target plex-media-server.service
 
 [Service]
 Type=simple
 User=sabnzbd
 Group=sabnzbd
-WorkingDirectory=/opt/mediacleaner
-ExecStart=/usr/bin/python3.13 -m mediacleaner.web.app
+WorkingDirectory=/opt/mediapurge
+ExecStart=/usr/bin/python3.13 -m mediapurge.web.app
 Restart=on-failure
 
 [Install]
@@ -231,7 +231,7 @@ WantedBy=multi-user.target
 The systemd service runs both the web UI and the scheduled maintenance:
 
 ```bash
-sudo systemctl enable --now mediacleaner
+sudo systemctl enable --now mediapurge
 ```
 
 Access the web UI at `https://your-host:9393`.
@@ -242,8 +242,8 @@ From the web UI: **Maintenance** → **Preview (Dry Run)** or **Run Now (Live)**
 
 From the command line:
 ```bash
-sudo -u sabnzbd python3.13 -m mediacleaner.maintenance --dry-run
-sudo -u sabnzbd python3.13 -m mediacleaner.maintenance
+sudo -u sabnzbd python3.13 -m mediapurge.maintenance --dry-run
+sudo -u sabnzbd python3.13 -m mediapurge.maintenance
 ```
 
 ## Web UI Pages

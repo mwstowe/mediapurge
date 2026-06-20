@@ -4,10 +4,10 @@ import os
 import bcrypt
 from flask import Flask, redirect, render_template, request, session, url_for
 
-from mediacleaner.config import get_config, load_config
-from mediacleaner.db import get_session, init_db
-from mediacleaner.engine import run_evaluation, sync_managed_media
-from mediacleaner.models import ActionLog, ManagedMedia, Rule, Trigger
+from mediapurge.config import get_config, load_config
+from mediapurge.db import get_session, init_db
+from mediapurge.engine import run_evaluation, sync_managed_media
+from mediapurge.models import ActionLog, ManagedMedia, Rule, Trigger
 
 from sqlalchemy import select, desc
 from sqlalchemy.orm import joinedload
@@ -136,7 +136,7 @@ def create_app() -> Flask:
         rating_key = request.args.get("plex_rating_key")
         if rating_key:
             try:
-                from mediacleaner.clients import plex as plex_client
+                from mediapurge.clients import plex as plex_client
                 server = plex_client._server()
                 item = server.fetchItem(int(rating_key))
                 breadcrumb = {"title": item.title, "thumb": item.thumb,
@@ -144,7 +144,7 @@ def create_app() -> Flask:
             except Exception:
                 pass
         try:
-            from mediacleaner.clients import plex as plex_client
+            from mediapurge.clients import plex as plex_client
             plex_users = plex_client.get_users()
         except Exception:
             plex_users = []
@@ -193,7 +193,7 @@ def create_app() -> Flask:
 
         db.close()
         try:
-            from mediacleaner.clients import plex as plex_client
+            from mediapurge.clients import plex as plex_client
             plex_users = plex_client.get_users()
         except Exception:
             plex_users = []
@@ -225,7 +225,7 @@ def create_app() -> Flask:
             _orphan_task["results"] = None
             import threading
             def _scan():
-                from mediacleaner.engine import run_orphan_scan
+                from mediapurge.engine import run_orphan_scan
                 try:
                     sync_managed_media()
                     _orphan_task["results"] = run_orphan_scan()
@@ -262,7 +262,7 @@ def create_app() -> Flask:
             sync_managed_media()
             report = run_evaluation(dry_run=dry_run)
             if not dry_run:
-                from mediacleaner.engine import execute_deletions, process_pending_actions
+                from mediapurge.engine import execute_deletions, process_pending_actions
                 process_pending_actions()
                 execute_deletions(report)
             _task["report"] = report
@@ -325,7 +325,7 @@ def create_app() -> Flask:
     @login_required
     def browse():
         """List Plex libraries."""
-        from mediacleaner.clients import plex as plex_client
+        from mediapurge.clients import plex as plex_client
         libraries = plex_client.get_libraries()
         db = get_session()
         lib_rules_map = {}
@@ -339,7 +339,7 @@ def create_app() -> Flask:
     @login_required
     def browse_library(library):
         """List items in a library."""
-        from mediacleaner.clients import plex as plex_client
+        from mediapurge.clients import plex as plex_client
         items = plex_client.get_library_items(library)
         mgr_info = plex_client.get_manager_info()
         items_data = []
@@ -370,7 +370,7 @@ def create_app() -> Flask:
     @login_required
     def browse_item(library, rating_key):
         """Show detail for a specific item."""
-        from mediacleaner.clients import plex as plex_client
+        from mediapurge.clients import plex as plex_client
         server = plex_client._server()
         item = server.fetchItem(rating_key)
         children = []
@@ -408,7 +408,7 @@ def create_app() -> Flask:
     @login_required
     def config_edit():
         import yaml, re
-        from mediacleaner.config import get_config, load_config
+        from mediapurge.config import get_config, load_config
         config_path = os.environ.get("MEDIACLEANER_CONFIG", "config.yaml")
         MASK = "••••••••"
         SENSITIVE_KEYS = ("smtp_pass", "admin_password", "secret_key", "api_key", "token")
@@ -473,9 +473,9 @@ def create_app() -> Flask:
     @app.route("/config/test-email", methods=["POST"])
     @login_required
     def config_test_email():
-        from mediacleaner import notify
+        from mediapurge import notify
         try:
-            notify.send("MediaCleaner Test", "This is a test email from MediaCleaner.")
+            notify.send("MediaPurge Test", "This is a test email from MediaPurge.")
             return redirect(url_for("config_edit") + "?msg=sent")
         except Exception as e:
             return redirect(url_for("config_edit") + f"?msg=fail&err={e}")
@@ -483,7 +483,7 @@ def create_app() -> Flask:
     @app.route("/config/test-connections", methods=["POST"])
     @login_required
     def config_test_connections():
-        from mediacleaner.clients import plex as plex_client, sonarr, radarr, medusa, ombi
+        from mediapurge.clients import plex as plex_client, sonarr, radarr, medusa, ombi
         import json
         results = {}
         tests = {
@@ -503,21 +503,21 @@ def create_app() -> Flask:
 
     @app.route("/confirm/snooze/<token>")
     def confirm_snooze(token):
-        from mediacleaner.engine import cancel_pending_by_token
+        from mediapurge.engine import cancel_pending_by_token
         if cancel_pending_by_token(token, "snooze"):
             return render_template("confirm.html", success=True)
         return render_template("confirm.html", success=False)
 
     @app.route("/confirm/disable/<token>")
     def confirm_disable(token):
-        from mediacleaner.engine import cancel_pending_by_token
+        from mediapurge.engine import cancel_pending_by_token
         if cancel_pending_by_token(token, "disable"):
             return render_template("confirm.html", success=True)
         return render_template("confirm.html", success=False)
 
     @app.route("/confirm/unwatched/<token>")
     def confirm_unwatched(token):
-        from mediacleaner.engine import cancel_pending_by_token
+        from mediapurge.engine import cancel_pending_by_token
         if cancel_pending_by_token(token, "unwatched"):
             return render_template("confirm.html", success=True)
         return render_template("confirm.html", success=False)
@@ -525,12 +525,12 @@ def create_app() -> Flask:
     @app.route("/confirm/keep/<token>")
     def confirm_keep(token):
         """Legacy URL — treat as snooze."""
-        from mediacleaner.engine import cancel_pending_by_token
+        from mediapurge.engine import cancel_pending_by_token
         if cancel_pending_by_token(token, "snooze"):
             return render_template("confirm.html", success=True)
         return render_template("confirm.html", success=False)
 
-    from mediacleaner.scheduler import start_scheduler
+    from mediapurge.scheduler import start_scheduler
     start_scheduler(app)
 
     return app

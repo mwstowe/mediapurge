@@ -6,7 +6,7 @@ from email.message import EmailMessage
 
 import requests
 
-from mediacleaner.config import get_config
+from mediapurge.config import get_config
 
 log = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ def send_to(subject: str, body: str, recipient: str):
 def _send_email(subject: str, body: str, cfg: dict, recipient: str):
     msg = EmailMessage()
     msg["Subject"] = subject
-    msg["From"] = cfg.get("from", cfg.get("smtp_user", "mediacleaner@localhost"))
+    msg["From"] = cfg.get("from", cfg.get("smtp_user", "mediapurge@localhost"))
     msg["To"] = recipient
     msg.set_content(body)
 

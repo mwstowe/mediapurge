@@ -9,10 +9,10 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 
-from mediacleaner.clients import medusa, plex, radarr, sonarr, ombi
-from mediacleaner.db import get_session
-from mediacleaner.models import ActionLog, ManagedMedia, PendingAction, Rule, Trigger
-from mediacleaner import notify
+from mediapurge.clients import medusa, plex, radarr, sonarr, ombi
+from mediapurge.db import get_session
+from mediapurge.models import ActionLog, ManagedMedia, PendingAction, Rule, Trigger
+from mediapurge import notify
 
 log = logging.getLogger(__name__)
 
@@ -406,7 +406,7 @@ def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
 
 def run_evaluation(dry_run: bool = True) -> EngineReport:
     """Evaluate all Plex items against rules."""
-    from mediacleaner.config import get_config
+    from mediapurge.config import get_config
     report = EngineReport()
     session = get_session()
     cfg = get_config()
@@ -554,7 +554,7 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
 
 def run_orphan_scan() -> list[EvalResult]:
     """Separate orphan detection scan."""
-    from mediacleaner.config import get_config
+    from mediapurge.config import get_config
     cfg = get_config()
     excluded = cfg.get("maintenance", {}).get("excluded_libraries", [])
     orphans = []
@@ -829,7 +829,7 @@ def _handle_pending_confirm(session, rule: Rule, trigger: Trigger | None, rating
 
 def _send_confirmation_email(rule: Rule, trigger: Trigger | None, title: str, token: str):
     """Send confirmation email listing available methods from trigger.confirm_methods."""
-    from mediacleaner.config import get_config
+    from mediapurge.config import get_config
     cfg = get_config()
     base_url = cfg["web"].get("base_url", f"https://localhost:{cfg['web'].get('port', 9393)}")
 
@@ -862,7 +862,7 @@ def _send_confirmation_email(rule: Rule, trigger: Trigger | None, title: str, to
     lines.append(f"\nIf you do nothing, it will be deleted after {(datetime.now(timezone.utc) + timedelta(days=confirm_days)).strftime('%B %d, %Y')}.")
 
     body = "\n".join(lines)
-    subject = f"MediaCleaner: {title} scheduled for deletion"
+    subject = f"MediaPurge: {title} scheduled for deletion"
     recipient = trigger.confirm_email if trigger and trigger.confirm_email else None
     if not recipient:
         # Resolve from watched_by -> user_emails config
@@ -885,7 +885,7 @@ def _send_kept_notification(pa: PendingAction, action_taken: str):
     """Notify the user that their media will NOT be deleted."""
     if not pa.notified_to:
         return
-    subject = f"MediaCleaner: {pa.media_title} — kept"
+    subject = f"MediaPurge: {pa.media_title} — kept"
     body = (
         f'Good news — "{pa.media_title}" will NOT be deleted.\n\n'
         f"Action taken: {action_taken}\n\n"

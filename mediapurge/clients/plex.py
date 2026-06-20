@@ -4,7 +4,7 @@ import time
 
 from plexapi.server import PlexServer
 
-from mediacleaner.config import get_config
+from mediapurge.config import get_config
 
 
 def _to_utc(dt: datetime | None) -> datetime | None:
@@ -85,7 +85,7 @@ def _get_system_accounts():
 @_timed_lru_cache(seconds=300)
 def get_manager_info():
     """Build a lookup of file path -> {managers, ended} from Sonarr, Radarr, Medusa."""
-    from mediacleaner.clients import sonarr, radarr, medusa
+    from mediapurge.clients import sonarr, radarr, medusa
     import warnings
     warnings.filterwarnings("ignore")
     info = {}

@@ -1,6 +1,6 @@
 import requests
 
-from mediacleaner.config import get_config
+from mediapurge.config import get_config
 
 
 def _base() -> tuple[str, dict]:
