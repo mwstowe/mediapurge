@@ -79,6 +79,21 @@
   </div>
 </div>
 
+<div style="margin:1rem 0;display:flex;gap:1rem;align-items:center;">
+  <form method="post" action="{{ url_for('browse_delete', library=library, rating_key=item.rating_key) }}" onsubmit="return confirm('Delete {{ item.title }}?');" style="margin:0;">
+    <button type="submit" class="btn btn-danger btn-sm">Delete Now</button>
+  </form>
+  <form method="post" action="{{ url_for('browse_move', library=library, rating_key=item.rating_key) }}" style="margin:0;display:flex;gap:0.5rem;align-items:center;">
+    <select name="move_to" style="max-width:300px;">
+      <option value="">— Move to —</option>
+      {% for d in move_destinations %}
+      <option value="{{ d.value }}">{{ d.plex_library }} — {{ d.path }} [{{ d.manager }}]</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary btn-sm">Move Now</button>
+  </form>
+</div>
+
 {% if children %}
 <table style="margin-top:1rem;">
   <tr><th></th><th>Episode</th><th>Watched</th><th>Last Activity</th><th>By</th></tr>

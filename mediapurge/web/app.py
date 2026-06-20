@@ -8,6 +8,7 @@ from mediapurge.config import get_config, load_config
 from mediapurge.db import get_session, init_db
 from mediapurge.engine import run_evaluation, sync_managed_media
 from mediapurge.models import ActionLog, ManagedMedia, Rule, Trigger
+from mediapurge.clients import sonarr, radarr, medusa
 
 from sqlalchemy import select, desc
 from sqlalchemy.orm import joinedload
@@ -80,6 +81,7 @@ def create_app() -> Flask:
         days_list = request.form.getlist("trigger_days[]")
         confirm_days_list = request.form.getlist("trigger_confirm_days[]")
         confirm_emails = request.form.getlist("trigger_confirm_email[]")
+        move_tos = request.form.getlist("trigger_move_to[]")
 
         triggers = []
         for i, ttype in enumerate(types):
@@ -101,6 +103,7 @@ def create_app() -> Flask:
                 type=ttype,
                 days=int(days_list[i]) if i < len(days_list) else 7,
                 action=action,
+                move_to=move_tos[i] if i < len(move_tos) and move_tos[i] else None,
                 confirm_days=int(confirm_days_list[i]) if i < len(confirm_days_list) else 7,
                 confirm_methods=",".join(methods),
                 confirm_email=confirm_emails[i] if i < len(confirm_emails) and confirm_emails[i] else None,
@@ -119,7 +122,6 @@ def create_app() -> Flask:
                 plex_rating_key=request.form.get("plex_rating_key") or None,
                 media_title=request.form.get("media_title") or None,
                 action=request.form["action"],
-                move_to=request.form.get("move_to") or None,
                 watched_by=",".join(request.form.getlist("watched_by")) or "any",
                 protect_on_deck="protect_on_deck" in request.form,
                 processing_mode=request.form.get("processing_mode", "episode"),
@@ -172,7 +174,6 @@ def create_app() -> Flask:
             rule.plex_rating_key = request.form.get("plex_rating_key") or None
             rule.media_title = request.form.get("media_title") or None
             rule.action = request.form["action"]
-            rule.move_to = request.form.get("move_to") or None
             rule.watched_by = ",".join(request.form.getlist("watched_by")) or "any"
             rule.protect_on_deck = "protect_on_deck" in request.form
             rule.processing_mode = request.form.get("processing_mode", "episode")
@@ -191,6 +192,7 @@ def create_app() -> Flask:
         for t in rule.triggers:
             triggers_data.append({
                 "type": t.type, "days": t.days, "action": t.action,
+                "move_to": t.move_to,
                 "confirm_days": t.confirm_days, "confirm_methods": t.confirm_methods,
                 "confirm_email": t.confirm_email,
             })
@@ -399,8 +401,67 @@ def create_app() -> Flask:
                     })
         item_data = {"title": item.title, "rating_key": item.ratingKey, "type": item.type,
                      "year": getattr(item, "year", ""), "thumb": item.thumb}
+        try:
+            move_destinations = plex_client.get_move_destinations()
+        except Exception:
+            move_destinations = []
         return render_template("browse.html", libraries=None, items=None,
-                               library=library, item=item_data, children=children)
+                               library=library, item=item_data, children=children,
+                               move_destinations=move_destinations)
+
+    @app.route("/browse/<library>/<int:rating_key>/delete", methods=["POST"])
+    @login_required
+    def browse_delete(library, rating_key):
+        """Immediately delete an item from its manager."""
+        from mediapurge.clients import plex as plex_client
+        from mediapurge.engine import find_manager, _delete_direct, EvalResult
+        server = plex_client._server()
+        item = server.fetchItem(rating_key)
+        manager, manager_id = find_manager(item)
+        result = EvalResult(title=item.title, rating_key=str(rating_key), action="delete",
+                            manager=manager, manager_id=manager_id)
+        try:
+            if manager == "sonarr":
+                sonarr.delete_series(int(manager_id), delete_files=True)
+            elif manager == "radarr":
+                radarr.delete_movie(int(manager_id), delete_files=True)
+            elif manager == "medusa":
+                medusa.delete_show(str(manager_id), remove_files=True)
+            else:
+                _delete_direct(result)
+            db = get_session()
+            db.add(ActionLog(media_title=item.title, plex_rating_key=str(rating_key),
+                             action_taken="delete", details="immediate from browse"))
+            db.commit()
+            db.close()
+        except Exception:
+            pass
+        return redirect(url_for("browse_library", library=library))
+
+    @app.route("/browse/<library>/<int:rating_key>/move", methods=["POST"])
+    @login_required
+    def browse_move(library, rating_key):
+        """Immediately move an item to another location."""
+        from mediapurge.clients import plex as plex_client
+        from mediapurge.engine import find_manager, _do_move, EvalResult
+        dest = request.form.get("move_to", "")
+        if not dest:
+            return redirect(url_for("browse_item", library=library, rating_key=rating_key))
+        server = plex_client._server()
+        item = server.fetchItem(rating_key)
+        manager, manager_id = find_manager(item)
+        result = EvalResult(title=item.title, rating_key=str(rating_key), action="move",
+                            manager=manager, manager_id=manager_id, move_to=dest)
+        try:
+            _do_move(result, dest)
+            db = get_session()
+            db.add(ActionLog(media_title=item.title, plex_rating_key=str(rating_key),
+                             action_taken="move", details=f"immediate move to {dest}"))
+            db.commit()
+            db.close()
+        except Exception:
+            pass
+        return redirect(url_for("browse_library", library=library))
 
     @app.route("/plex_thumb")
     @login_required

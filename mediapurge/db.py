@@ -74,5 +74,18 @@ def _migrate():
     _add_col("pending_actions", "trigger_id", "INTEGER", "NULL")
     _add_col("pending_actions", "notified_to", "VARCHAR", "NULL")
 
+    # Trigger migrations
+    _add_col("triggers", "move_to", "VARCHAR", "NULL")
+
+    # Migrate Rule.action: delete/move → manage, push move_to to triggers
+    existing_rules = [r[1] for r in conn.execute("PRAGMA table_info(rules)").fetchall()]
+    if "move_to" in existing_rules:
+        # Migrate move rules: set trigger.move_to from rule.move_to
+        rows = conn.execute("SELECT id, move_to FROM rules WHERE action='move' AND move_to IS NOT NULL").fetchall()
+        for rule_id, move_to in rows:
+            conn.execute("UPDATE triggers SET move_to=?, action='move' WHERE rule_id=?", (move_to, rule_id))
+        # Convert delete/move actions to manage
+        conn.execute("UPDATE rules SET action='manage' WHERE action IN ('delete', 'move')")
+
     conn.commit()
     conn.close()

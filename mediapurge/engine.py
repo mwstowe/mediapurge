@@ -203,7 +203,7 @@ def _check_trigger(item, trigger: Trigger, rule: Rule) -> tuple[str | None, str]
             return None, ""
         if trigger.action == "confirm":
             return "pending_confirm", f"watched {days}d ago by {rule.watched_by}"
-        return rule.action, f"watched {days}d ago by {rule.watched_by}"
+        return trigger.action, f"watched {days}d ago by {rule.watched_by}"
 
     elif trigger.type == "inactive":
         last_viewed_at = plex._to_utc(getattr(item, "lastViewedAt", None))
@@ -223,7 +223,7 @@ def _check_trigger(item, trigger: Trigger, rule: Rule) -> tuple[str | None, str]
         label = f"inactive {inactive}d" if last_viewed_at else f"never watched, added {inactive}d ago"
         if trigger.action == "confirm":
             return "pending_confirm", f"{label} (limit {trigger.days}d)"
-        return rule.action, f"{label} (limit {trigger.days}d)"
+        return trigger.action, f"{label} (limit {trigger.days}d)"
 
     elif trigger.type == "age":
         age = plex.days_since_added(item)
@@ -231,7 +231,7 @@ def _check_trigger(item, trigger: Trigger, rule: Rule) -> tuple[str | None, str]
             return None, ""
         if trigger.action == "confirm":
             return "pending_confirm", f"exceeded max age ({age} >= {trigger.days} days)"
-        return rule.action, f"exceeded max age ({age} >= {trigger.days} days)"
+        return trigger.action, f"exceeded max age ({age} >= {trigger.days} days)"
 
     return None, ""
 
@@ -365,12 +365,22 @@ def evaluate_show_episodes(show, rule: Rule) -> list[tuple]:
         if trigger.type == "inactive":
             inactive_days = plex.days_since_last_activity(show)
             if inactive_days is not None and inactive_days >= trigger.days:
-                action = "pending_confirm" if trigger.action == "confirm" else "delete_show"
+                if trigger.action == "confirm":
+                    action = "pending_confirm"
+                elif trigger.action == "move":
+                    action = "move"
+                else:
+                    action = "delete_show"
                 return [(show, action, f"inactive {inactive_days}d (limit {trigger.days}d)", trigger)]
             if inactive_days is None:
                 age = plex.days_since_added(show)
                 if age >= trigger.days:
-                    action = "pending_confirm" if trigger.action == "confirm" else "delete_show"
+                    if trigger.action == "confirm":
+                        action = "pending_confirm"
+                    elif trigger.action == "move":
+                        action = "move"
+                    else:
+                        action = "delete_show"
                     return [(show, action, f"never watched, added {age}d ago (limit {trigger.days}d)", trigger)]
 
     # Episode-mode: process oldest first, stop at first non-qualifying
@@ -442,25 +452,26 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
             manager, manager_id = find_manager(item)
 
             for r in rules:
-                # Move rules always operate at the show/movie level
-                if r.action == "move" and hasattr(item, "episodes"):
-                    action, reason, trigger = evaluate_item(item, r)
-                    if action == "move":
-                        report.results.append(EvalResult(
-                            title=title, rating_key=key, action="move",
-                            rule_id=r.id, trigger_id=trigger.id if trigger else None,
-                            reason=reason, manager=manager, manager_id=manager_id,
-                            move_to=r.move_to,
-                        ))
-                        session.add(ActionLog(
-                            media_title=title, plex_rating_key=key, rule_id=r.id,
-                            action_taken="move", dry_run=dry_run,
-                            details=json.dumps({"reason": reason, "move_to": r.move_to}),
-                        ))
-                    break
-
-                # Show-scoped rules evaluate per-episode
+                # Show-scoped rules evaluate per-episode (or show-level for move triggers)
                 if r.scope in ("show", "library") and hasattr(item, "episodes"):
+                    # Move triggers always operate at show level
+                    move_trigger = next((t for t in r.triggers if t.action == "move" and t.enabled), None)
+                    if move_trigger:
+                        action, reason, trigger = evaluate_item(item, r)
+                        if action == "move":
+                            report.results.append(EvalResult(
+                                title=title, rating_key=key, action="move",
+                                rule_id=r.id, trigger_id=trigger.id if trigger else None,
+                                reason=reason, manager=manager, manager_id=manager_id,
+                                move_to=trigger.move_to if trigger else None,
+                            ))
+                            session.add(ActionLog(
+                                media_title=title, plex_rating_key=key, rule_id=r.id,
+                                action_taken="move", dry_run=dry_run,
+                                details=json.dumps({"reason": reason, "move_to": trigger.move_to if trigger else None}),
+                            ))
+                            break
+
                     triggered = False
                     pending_eps = []
                     for ep, action, reason, trigger in evaluate_show_episodes(item, r):
@@ -474,6 +485,21 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
                                 media_title=title, plex_rating_key=key,
                                 rule_id=r.id, action_taken="delete", dry_run=dry_run,
                                 details=json.dumps({"reason": reason, "manager": manager, "scope": "whole_show"}),
+                            ))
+                            triggered = True
+                            pending_eps = []
+                            break
+                        elif action == "move":
+                            report.results.append(EvalResult(
+                                title=title, rating_key=key, action="move",
+                                rule_id=r.id, trigger_id=trigger.id if trigger else None,
+                                reason=reason, manager=manager, manager_id=manager_id,
+                                move_to=trigger.move_to if trigger else None,
+                            ))
+                            session.add(ActionLog(
+                                media_title=title, plex_rating_key=key, rule_id=r.id,
+                                action_taken="move", dry_run=dry_run,
+                                details=json.dumps({"reason": reason, "move_to": trigger.move_to if trigger else None}),
                             ))
                             triggered = True
                             pending_eps = []
@@ -530,7 +556,7 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
                         title=title, rating_key=key, action=action,
                         rule_id=r.id, trigger_id=trigger.id if trigger else None,
                         reason=reason, manager=manager, manager_id=manager_id,
-                        move_to=r.move_to if action == "move" else None,
+                        move_to=trigger.move_to if trigger and action == "move" else None,
                     )
                     report.results.append(result)
                     if action == "delete":
@@ -543,7 +569,7 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
                         session.add(ActionLog(
                             media_title=title, plex_rating_key=key, rule_id=r.id,
                             action_taken="move", dry_run=dry_run,
-                            details=json.dumps({"reason": reason, "manager": manager, "move_to": r.move_to}),
+                            details=json.dumps({"reason": reason, "manager": manager, "move_to": trigger.move_to if trigger else None}),
                         ))
                     elif action == "pending_confirm":
                         _handle_pending_confirm(session, r, trigger, key, title, dry_run)

@@ -39,27 +39,9 @@
 
   <label for="action">Action</label>
   <select name="action" id="action">
-    <option value="keep" {{ "selected" if rule and rule.action == "keep" }}>Keep — protect from broader delete rules</option>
-    <option value="delete" {{ "selected" if (rule and rule.action == "delete") or not rule }}>Delete — remove when conditions are met</option>
-    <option value="move" {{ "selected" if rule and rule.action == "move" }}>Move — relocate when conditions are met</option>
+    <option value="keep" {{ "selected" if rule and rule.action == "keep" }}>Keep — protect from broader rules</option>
+    <option value="manage" {{ "selected" if (rule and rule.action == "manage") or not rule }}>Manage — apply triggers below</option>
   </select>
-
-  <div id="f-move-dest">
-    <label for="move_to">Move destination</label>
-    <select name="move_to" id="move_to" style="max-width:100%;">
-      <option value="">— Select destination —</option>
-      {% set current_type = namespace(val='') %}
-      {% for d in move_destinations %}
-      {% if d.lib_type != current_type.val %}
-        {% if current_type.val %}</optgroup>{% endif %}
-        {% set current_type.val = d.lib_type %}
-        <optgroup label="{{ 'TV Shows' if d.lib_type == 'show' else 'Movies' if d.lib_type == 'movie' else 'Other' }}">
-      {% endif %}
-      <option value="{{ d.value }}" {{ "selected" if rule and rule.move_to == d.value }}>{{ d.plex_library }} — {{ d.path }} [{{ d.manager }}]</option>
-      {% endfor %}
-      {% if current_type.val %}</optgroup>{% endif %}
-    </select>
-  </div>
 </fieldset>
 
 <!-- EPISODE HANDLING (shows only) -->
@@ -120,8 +102,26 @@
 
       <label>On trigger</label>
       <div style="margin:0.3rem 0;">
-        <label style="display:block;"><input type="radio" name="trigger_action_{{ loop.index0 }}" value="delete" {{ "checked" if t.get("action","delete") == "delete" }}> <span class="trigger-immediate-label">Delete immediately</span></label>
+        <label style="display:block;"><input type="radio" name="trigger_action_{{ loop.index0 }}" value="delete" {{ "checked" if t.get("action","delete") == "delete" }}> Delete immediately</label>
+        <label style="display:block;"><input type="radio" name="trigger_action_{{ loop.index0 }}" value="move" {{ "checked" if t.get("action") == "move" }}> Move to…</label>
         <label style="display:block;"><input type="radio" name="trigger_action_{{ loop.index0 }}" value="confirm" {{ "checked" if t.get("action") == "confirm" }}> Confirm first</label>
+      </div>
+
+      <div class="move-opts" style="margin-left:1.5rem;display:{{ '' if t.get('action') == 'move' else 'none' }};">
+        <label>Destination</label>
+        <select name="trigger_move_to[]" style="max-width:100%;">
+          <option value="">— Select —</option>
+          {% set current_type = namespace(val='') %}
+          {% for d in move_destinations %}
+          {% if d.lib_type != current_type.val %}
+            {% if current_type.val %}</optgroup>{% endif %}
+            {% set current_type.val = d.lib_type %}
+            <optgroup label="{{ 'TV Shows' if d.lib_type == 'show' else 'Movies' if d.lib_type == 'movie' else 'Other' }}">
+          {% endif %}
+          <option value="{{ d.value }}" {{ "selected" if t.get("move_to") == d.value }}>{{ d.plex_library }} — {{ d.path }} [{{ d.manager }}]</option>
+          {% endfor %}
+          {% if current_type.val %}</optgroup>{% endif %}
+        </select>
       </div>
 
       <div class="confirm-opts" style="margin-left:1.5rem;display:{{ '' if t.get('action') == 'confirm' else 'none' }};">
@@ -170,21 +170,19 @@ function updateVisibility() {
 
   document.getElementById('f-library').style.display = scope === 'library' ? '' : 'none';
   document.getElementById('f-ratingkey').style.display = scope !== 'library' ? '' : 'none';
-  document.getElementById('f-episode-opts').style.display = (action === 'delete' || action === 'move') ? '' : 'none';
-  document.getElementById('f-show-only').style.display = ((action === 'delete') && !isMovie) ? '' : 'none';
-  document.getElementById('f-triggers').style.display = (action === 'delete' || action === 'move') ? '' : 'none';
-  document.getElementById('f-move-dest').style.display = action === 'move' ? '' : 'none';
+  document.getElementById('f-episode-opts').style.display = action === 'manage' ? '' : 'none';
+  document.getElementById('f-show-only').style.display = (action === 'manage' && !isMovie) ? '' : 'none';
+  document.getElementById('f-triggers').style.display = action === 'manage' ? '' : 'none';
   document.getElementById('lbl-unit').textContent = (mode && mode.value === 'season') ? 'seasons' : 'episodes';
-  // Update trigger action labels
-  var actionLabel = action === 'move' ? 'Move immediately' : 'Delete immediately';
-  document.querySelectorAll('.trigger-immediate-label').forEach(function(el) { el.textContent = actionLabel; });
 }
 
 function updateTriggerVisibility(card) {
   var type = card.querySelector('.trigger-type').value;
-  var actionRadios = card.querySelectorAll('input[type="radio"]');
-  var isConfirm = actionRadios[1] && actionRadios[1].checked;
-  card.querySelector('.confirm-opts').style.display = isConfirm ? '' : 'none';
+  var actionRadios = card.querySelectorAll('input[name^="trigger_action_"]');
+  var selectedAction = '';
+  actionRadios.forEach(function(r) { if (r.checked) selectedAction = r.value; });
+  card.querySelector('.confirm-opts').style.display = selectedAction === 'confirm' ? '' : 'none';
+  card.querySelector('.move-opts').style.display = selectedAction === 'move' ? '' : 'none';
   // Show/hide confirm methods based on trigger type
   var methods = card.querySelector('.confirm-methods');
   if (methods) {
@@ -200,16 +198,9 @@ function updateTriggerVisibility(card) {
 
 function setTriggerDefaults(card) {
   var type = card.querySelector('.trigger-type').value;
-  var actionRadios = card.querySelectorAll('input[type="radio"]');
-  var ruleAction = document.getElementById('action').value;
-  // Default: move → always immediate, delete + inactivity/age → confirm, delete + watched → immediate
-  if (ruleAction === 'move') {
-    actionRadios[0].checked = true;
-  } else if (type === 'inactive' || type === 'age') {
-    actionRadios[1].checked = true;
-  } else {
-    actionRadios[0].checked = true;
-  }
+  var actionRadios = card.querySelectorAll('input[name^="trigger_action_"]');
+  // Default: watched → delete, inactive/age → delete
+  actionRadios.forEach(function(r) { r.checked = (r.value === 'delete'); });
   updateTriggerVisibility(card);
 }
 
@@ -234,7 +225,7 @@ document.getElementById('add-trigger').addEventListener('click', function() {
   template.querySelector('strong').textContent = 'Trigger ' + (idx + 1);
   template.querySelector('.remove-trigger').style.display = '';
   // Reset values
-  template.querySelectorAll('input[type="number"]').forEach(i => i.value = i === template.querySelectorAll('input[type="number"]')[0] ? '7' : '7');
+  template.querySelectorAll('input[type="number"]').forEach(i => i.value = '7');
   template.querySelectorAll('input[type="checkbox"]').forEach(i => i.checked = false);
   template.querySelectorAll('input[type="radio"]')[0].checked = true;
   // Fix radio names

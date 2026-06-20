@@ -18,8 +18,7 @@ class Rule(Base):
     plex_library: Mapped[str | None] = mapped_column(String, nullable=True)
     plex_rating_key: Mapped[str | None] = mapped_column(String, nullable=True)
     media_title: Mapped[str | None] = mapped_column(String, nullable=True)
-    action: Mapped[str] = mapped_column(String, default='delete')  # keep/delete/move
-    move_to: Mapped[str | None] = mapped_column(String, nullable=True)  # destination path for move
+    action: Mapped[str] = mapped_column(String, default='manage')  # keep/manage
     watched_by: Mapped[str] = mapped_column(String, default='any')
     protect_on_deck: Mapped[bool] = mapped_column(Boolean, default=True)
     processing_mode: Mapped[str] = mapped_column(String, default='episode')  # episode/season
@@ -40,7 +39,8 @@ class Trigger(Base):
     rule_id: Mapped[int] = mapped_column(Integer, ForeignKey('rules.id'))
     type: Mapped[str] = mapped_column(String)  # watched/inactive/age
     days: Mapped[int] = mapped_column(Integer, default=7)
-    action: Mapped[str] = mapped_column(String, default='delete')  # delete/confirm
+    action: Mapped[str] = mapped_column(String, default='delete')  # delete/move/confirm
+    move_to: Mapped[str | None] = mapped_column(String, nullable=True)
     confirm_days: Mapped[int] = mapped_column(Integer, default=7)
     confirm_methods: Mapped[str] = mapped_column(String, default='snooze')  # comma-separated
     confirm_email: Mapped[str | None] = mapped_column(String, nullable=True)
