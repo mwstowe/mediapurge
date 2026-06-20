@@ -57,6 +57,7 @@
 {% set deletions = report.results | selectattr("action", "equalto", "delete") | list %}
 {% set moves = report.results | selectattr("action", "equalto", "move") | list %}
 {% set pending = report.results | selectattr("action", "equalto", "pending_confirm") | list %}
+{% set awaiting = report.results | selectattr("action", "equalto", "awaiting_response") | list %}
 
 {% if deletions %}
 <h2 style="margin-top:1.5rem;">{{ "Deleted" if ran else "Would Delete" }} ({{ deletions | length }}) — {{ deletions | sum(attribute='file_size') | humansize }}</h2>
@@ -99,6 +100,19 @@
     <td>{{ r.title }}</td>
     <td>{{ r.reason }}</td>
     <td>{% if r.notified_at %}<span style="color:#4caf50;">✓ {{ r.notified_at }}</span>{% else %}<span style="color:#aaa;">not yet</span>{% endif %}</td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+{% if awaiting %}
+<h2>Awaiting Response ({{ awaiting | length }})</h2>
+<table>
+  <tr><th>Title</th><th>Status</th></tr>
+  {% for r in awaiting %}
+  <tr>
+    <td>{{ r.title }}</td>
+    <td style="color:#ff9800;">{{ r.reason }}</td>
   </tr>
   {% endfor %}
 </table>

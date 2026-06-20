@@ -449,7 +449,7 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
             if not rules:
                 continue
 
-            # Skip items that already have an active pending action
+            # If item already has an active pending action, show status but don't re-evaluate
             existing_pa = session.execute(
                 select(PendingAction).where(
                     PendingAction.plex_rating_key == key,
@@ -458,6 +458,12 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
                 )
             ).scalar_one_or_none()
             if existing_pa:
+                expires = existing_pa.expires_at.strftime("%Y-%m-%d") if existing_pa.expires_at else "?"
+                report.results.append(EvalResult(
+                    title=title, rating_key=key, action="awaiting_response",
+                    reason=f"notified {existing_pa.notified_at.strftime('%m-%d') if existing_pa.notified_at else '?'}, expires {expires}",
+                    notified_at=existing_pa.notified_at.strftime("%Y-%m-%d %H:%M") if existing_pa.notified_at else None,
+                ))
                 continue
 
             manager, manager_id = find_manager(item)
