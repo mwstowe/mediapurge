@@ -34,19 +34,19 @@ form input[type="checkbox"], form input[type="radio"] { width: auto; }
 </head>
 <body>
 {% if session.get('authed') %}
-<div style="background:#16213e;text-align:center;padding:0.5rem;">
-  <img src="{{ url_for('static', filename='logo.png') }}" alt="MediaPurge">
+<div style="position:relative;">
+  <img src="{{ url_for('static', filename='logo.png') }}" alt="MediaPurge" style="position:absolute;left:1rem;top:0;z-index:10;">
+  <nav style="padding-left:180px;">
+    <a href="{{ url_for('dashboard') }}">Dashboard</a>
+    <a href="{{ url_for('browse') }}">Browse</a>
+    <a href="{{ url_for('rules_list') }}">Rules</a>
+    <a href="{{ url_for('orphans') }}">Orphans</a>
+    <a href="{{ url_for('action_log') }}">Log</a>
+    <a href="{{ url_for('preview') }}">Maintenance</a>
+    <a href="{{ url_for('config_edit') }}">Config</a>
+    <a href="{{ url_for('logout') }}">Logout</a>
+  </nav>
 </div>
-<nav>
-  <a href="{{ url_for('dashboard') }}">Dashboard</a>
-  <a href="{{ url_for('browse') }}">Browse</a>
-  <a href="{{ url_for('rules_list') }}">Rules</a>
-  <a href="{{ url_for('orphans') }}">Orphans</a>
-  <a href="{{ url_for('action_log') }}">Log</a>
-  <a href="{{ url_for('preview') }}">Maintenance</a>
-  <a href="{{ url_for('config_edit') }}">Config</a>
-  <a href="{{ url_for('logout') }}">Logout</a>
-</nav>
 {% endif %}
 <div class="container">
 {% block content %}{% endblock %}
