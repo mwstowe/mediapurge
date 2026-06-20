@@ -143,3 +143,13 @@ def rename_series(series_id: int):
     r = requests.post(f"{url}/api/v3/command", headers=headers,
                       json={"name": "RenameSeries", "seriesIds": [series_id]})
     r.raise_for_status()
+
+
+def manual_import(series_id: int, files: list[dict]):
+    """Manually import files into specific episodes.
+    files: [{"path": str, "seriesId": int, "seasonNumber": int, "episodeIds": [int]}]
+    """
+    url, headers = _base()
+    r = requests.post(f"{url}/api/v3/command", headers=headers,
+                      json={"name": "ManualImport", "importMode": "move", "files": files})
+    r.raise_for_status()
