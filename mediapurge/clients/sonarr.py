@@ -108,6 +108,11 @@ def add_series(tvdb_id: int, title: str, root_folder: str):
     series["rootFolderPath"] = root_folder
     series["monitored"] = True
     series["addOptions"] = {"searchForMissingEpisodes": False}
+    # Use first available quality profile if not set
+    if not series.get("qualityProfileId"):
+        qr = requests.get(f"{url}/api/v3/qualityprofile", headers=headers)
+        if qr.status_code == 200 and qr.json():
+            series["qualityProfileId"] = qr.json()[0]["id"]
     r = requests.post(f"{url}/api/v3/series", headers=headers, json=series)
     r.raise_for_status()
     return r.json()["id"]
