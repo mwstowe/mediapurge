@@ -15,8 +15,16 @@
     </form>
     <form method="post" action="{{ url_for('immediate_move', rating_key=request.args.get('plex_rating_key', 0)) }}" style="margin:0;display:flex;gap:0.3rem;align-items:center;">
       <select name="move_to" style="font-size:0.8rem;padding:0.2rem;max-width:150px;">
-        {% for d in move_destinations %}
+        {% set item_type = breadcrumb.type if breadcrumb else '' %}
+        {% for d in move_destinations | sort(attribute='lib_type', reverse=(item_type == 'movie')) %}
+        {% if (item_type == 'show' and d.lib_type == 'show') or (item_type == 'movie' and d.lib_type == 'movie') or (item_type not in ('show', 'movie')) %}
         <option value="{{ d.value }}">{{ d.plex_library }} [{{ d.manager }}]</option>
+        {% endif %}
+        {% endfor %}
+        {% for d in move_destinations %}
+        {% if (item_type == 'show' and d.lib_type != 'show') or (item_type == 'movie' and d.lib_type != 'movie') %}
+        <option value="{{ d.value }}">{{ d.plex_library }} [{{ d.manager }}]</option>
+        {% endif %}
         {% endfor %}
       </select>
       <button class="btn btn-primary btn-sm">Move Now</button>
