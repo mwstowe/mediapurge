@@ -94,16 +94,25 @@ def add_show(tvdb_id: int, location: str, anime: bool = False, show_list: str = 
     slug = f"tvdb{tvdb_id}"
     time.sleep(5)
 
-    # Step 3: Patch the config to set correct location, type, and category
-    config_patch = {"config": {"location": location, "anime": anime}}
+    # Step 3: Patch config — set defaultEpisodeStatus to Ignored first to prevent downloads
+    config_patch = {"config": {
+        "location": location,
+        "anime": anime,
+        "defaultEpisodeStatus": "Ignored",
+        "paused": True,
+    }}
     if show_list:
         config_patch["config"]["showLists"] = [show_list]
     elif anime:
         config_patch["config"]["showLists"] = ["anime"]
-    if default_status:
-        config_patch["config"]["defaultEpisodeStatus"] = default_status
-
-    r = requests.patch(f"{url}/api/v2/series/{slug}", headers=headers, json=config_patch, verify=False)
-    # Also patch showType at root level
+    requests.patch(f"{url}/api/v2/series/{slug}", headers=headers, json=config_patch, verify=False)
     if anime:
         requests.patch(f"{url}/api/v2/series/{slug}", headers=headers, json={"showType": "anime"}, verify=False)
+
+    # Step 4: Refresh to detect existing files (sets them to Downloaded)
+    refresh_show(slug)
+    time.sleep(5)
+
+    # Step 5: Unpause and set the real defaultEpisodeStatus for future episodes
+    requests.patch(f"{url}/api/v2/series/{slug}", headers=headers,
+                   json={"config": {"defaultEpisodeStatus": default_status, "paused": False}}, verify=False)
