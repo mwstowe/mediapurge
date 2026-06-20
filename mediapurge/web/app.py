@@ -544,6 +544,9 @@ def create_app() -> Flask:
             db = get_session()
             db.add(ActionLog(media_title=item.title, plex_rating_key=str(rating_key),
                              action_taken="move", details=f"immediate to {dest}"))
+            # Purge any rules targeting this item (move = new location, old rule is stale)
+            for r in db.query(Rule).filter(Rule.plex_rating_key == str(rating_key)).all():
+                db.delete(r)
             db.commit(); db.close()
             plex_client.scan_library(item.librarySectionTitle)
             # Restore watch status
