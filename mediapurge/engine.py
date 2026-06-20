@@ -988,8 +988,8 @@ def _fix_unmatched_episodes(series_id: int, file_map: dict):
                     "seriesId": series_id,
                     "seasonNumber": season,
                     "episodeIds": [ep_id],
-                    "quality": item.get("quality", {"quality": {"id": 1}, "revision": {"version": 1}}),
-                    "language": item.get("language", {"id": 1}),
+                    "quality": item.get("quality", {"quality": {"id": 4}, "revision": {"version": 1}}),
+                    "languages": item.get("languages", [{"id": 1, "name": "English"}]),
                 })
     if imports:
         try:
