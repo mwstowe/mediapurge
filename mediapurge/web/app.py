@@ -474,20 +474,37 @@ def create_app() -> Flask:
         from mediapurge.clients import plex as plex_client
         from mediapurge.engine import find_manager, _delete_direct, EvalResult
         from mediapurge.clients import sonarr, radarr, medusa
+        import warnings; warnings.filterwarnings("ignore")
         server = plex_client._server()
         item = server.fetchItem(rating_key)
+        paths = plex_client.get_file_paths(item)
         manager, manager_id = find_manager(item)
         result = EvalResult(title=item.title, rating_key=str(rating_key), action="delete",
                             manager=manager, manager_id=manager_id)
         try:
-            if manager == "sonarr":
-                sonarr.delete_series(int(manager_id), delete_files=True)
-            elif manager == "radarr":
-                radarr.delete_movie(int(manager_id), delete_files=True)
-            elif manager == "medusa":
-                medusa.delete_show(str(manager_id), remove_files=True)
-                _delete_direct(result)
-            else:
+            # Delete from ALL managers that track this item
+            deleted_files = False
+            for path in paths:
+                p = path.rstrip("/")
+                # Check Sonarr
+                for s in sonarr.get_all_series():
+                    if s["path"].rstrip("/") == p:
+                        sonarr.delete_series(s["id"], delete_files=not deleted_files)
+                        deleted_files = True
+                        break
+                # Check Radarr
+                for m in radarr.get_all_movies():
+                    if m.get("path", "").rstrip("/") == p:
+                        radarr.delete_movie(m["id"], delete_files=not deleted_files)
+                        deleted_files = True
+                        break
+                # Check Medusa
+                for s in medusa.get_all_shows():
+                    if s.get("config", {}).get("location", "").rstrip("/") == p:
+                        medusa.delete_show(s["id"]["slug"], remove_files=not deleted_files)
+                        deleted_files = True
+                        break
+            if not deleted_files:
                 _delete_direct(result)
             db = get_session()
             db.add(ActionLog(media_title=item.title, plex_rating_key=str(rating_key),
