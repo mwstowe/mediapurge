@@ -272,3 +272,54 @@ def all_episodes_watched_by(show, usernames: list[str]) -> tuple[bool, datetime 
         if viewed and (latest_viewed is None or viewed > latest_viewed):
             latest_viewed = viewed
     return True, latest_viewed
+
+
+def get_move_destinations() -> list[dict]:
+    """Return all known root folders with manager and Plex library info."""
+    from mediapurge.clients import sonarr, radarr, medusa
+    import warnings
+    warnings.filterwarnings("ignore")
+
+    # Get Plex library → path mapping
+    lib_paths = {}
+    try:
+        server = _server()
+        for section in server.library.sections():
+            for loc in section.locations:
+                lib_paths[loc.rstrip("/")] = section.title
+    except Exception:
+        pass
+
+    destinations = {}  # path -> {managers: [], plex_library: str}
+
+    try:
+        for f in sonarr.get_root_folders():
+            p = f.rstrip("/")
+            destinations.setdefault(p, {"managers": [], "plex_library": None})
+            destinations[p]["managers"].append("Sonarr")
+    except Exception:
+        pass
+    try:
+        for f in radarr.get_root_folders():
+            p = f.rstrip("/")
+            destinations.setdefault(p, {"managers": [], "plex_library": None})
+            destinations[p]["managers"].append("Radarr")
+    except Exception:
+        pass
+    try:
+        for f in medusa.get_root_folders():
+            p = f.rstrip("/")
+            destinations.setdefault(p, {"managers": [], "plex_library": None})
+            destinations[p]["managers"].append("Medusa")
+    except Exception:
+        pass
+
+    # Match paths to Plex libraries
+    for path, info in destinations.items():
+        for lib_path, lib_name in lib_paths.items():
+            if path == lib_path or lib_path.startswith(path + "/") or path.startswith(lib_path + "/"):
+                info["plex_library"] = lib_name
+                break
+
+    return [{"path": p, "managers": ", ".join(d["managers"]), "plex_library": d["plex_library"] or "—"}
+            for p, d in sorted(destinations.items())]

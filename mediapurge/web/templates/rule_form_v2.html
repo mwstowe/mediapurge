@@ -46,8 +46,12 @@
 
   <div id="f-move-dest">
     <label for="move_to">Move destination</label>
-    <input name="move_to" id="move_to" value="{{ rule.move_to or '' if rule else '' }}" placeholder="/pub/video/Archive">
-    <small style="color:#aaa;">Root folder path managed by Sonarr, Radarr, or Medusa</small>
+    <select name="move_to" id="move_to" style="max-width:100%;">
+      <option value="">— Select destination —</option>
+      {% for d in move_destinations %}
+      <option value="{{ d.path }}" {{ "selected" if rule and rule.move_to == d.path }}>{{ d.path }} [{{ d.managers }}] → Plex: {{ d.plex_library }}</option>
+      {% endfor %}
+    </select>
   </div>
 </fieldset>
 

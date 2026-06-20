@@ -149,7 +149,11 @@ def create_app() -> Flask:
             plex_users = plex_client.get_users()
         except Exception:
             plex_users = []
-        return render_template("rule_form_v2.html", rule=None, breadcrumb=breadcrumb, plex_users=plex_users)
+        try:
+            move_destinations = plex_client.get_move_destinations()
+        except Exception:
+            move_destinations = []
+        return render_template("rule_form_v2.html", rule=None, breadcrumb=breadcrumb, plex_users=plex_users, move_destinations=move_destinations)
 
     @app.route("/rules/<int:rule_id>/edit", methods=["GET", "POST"])
     @login_required
@@ -202,7 +206,11 @@ def create_app() -> Flask:
 
         # Attach triggers data to rule object for template
         rule.triggers_data = triggers_data
-        return render_template("rule_form_v2.html", rule=rule, breadcrumb=None, plex_users=plex_users)
+        try:
+            move_destinations = plex_client.get_move_destinations()
+        except Exception:
+            move_destinations = []
+        return render_template("rule_form_v2.html", rule=rule, breadcrumb=None, plex_users=plex_users, move_destinations=move_destinations)
 
     @app.route("/rules/<int:rule_id>/delete", methods=["POST"])
     @login_required
