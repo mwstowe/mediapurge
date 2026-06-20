@@ -2,12 +2,12 @@ plex:
   url: http://127.0.0.1:32400
   token: "YOUR_PLEX_TOKEN"
   user_tokens:
-    epstowe: "USER_PLEX_TOKEN"
-    adelaidestowe: "USER_PLEX_TOKEN"
+    alice: "ALICE_PLEX_TOKEN"
+    bob: "BOB_PLEX_TOKEN"
   user_emails:
-    mstowe: mstowe@example.com
-    epstowe: evelyn@example.com
-    adelaidestowe: adelaide@example.com
+    admin: admin@example.com
+    alice: alice@example.com
+    bob: bob@example.com
 
 sonarr:
   url: http://127.0.0.1:8989
@@ -28,17 +28,17 @@ ombi:
 web:
   secret_key: "CHANGE_ME_RANDOM_SECRET"
   admin_password: ""  # bcrypt hash; generate with: python -c "import bcrypt; print(bcrypt.hashpw(b'yourpass', bcrypt.gensalt()).decode())"
-  base_url: "https://mediacleaner.stowe.network:9393"
+  base_url: "https://mediapurge.example.com:9393"
   port: 9393
-  ssl_cert: /opt/mediacleaner/ssl/fullchain.pem
-  ssl_key: /opt/mediacleaner/ssl/privkey.pem
+  ssl_cert: /opt/mediapurge/ssl/fullchain.pem
+  ssl_key: /opt/mediapurge/ssl/privkey.pem
 
 notifications:
   enabled: false
   method: email  # email | discord
   email:
-    from: mediacleaner@stowe.network
-    admin: mstowe@stowe.network
+    from: mediapurge@example.com
+    admin: admin@example.com
     smtp_host: smtp.example.com
     smtp_port: 587
     smtp_user: ""
@@ -49,9 +49,9 @@ notifications:
 maintenance:
   dry_run: true
   schedule: "03:00"
-  log_file: /var/log/mediacleaner.log
+  log_file: /var/log/mediapurge.log
   excluded_libraries:
     - "3D Movies"
 
 database:
-  path: mediacleaner.db
+  path: mediapurge.db
