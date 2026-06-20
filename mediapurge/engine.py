@@ -1072,8 +1072,8 @@ def _fix_unmatched_episodes(series_id: int, file_map: dict):
 
 
 def _move_medusa_to_medusa(result: EvalResult, dest: str):
-    """Move within Medusa. Safe order: move files, remove + re-add."""
-    import shutil
+    """Move within Medusa. Safe order: move files, remove, wait, re-add."""
+    import shutil, time
 
     show_slug = str(result.manager_id)
     shows = medusa.get_all_shows()
@@ -1091,14 +1091,20 @@ def _move_medusa_to_medusa(result: EvalResult, dest: str):
     # Step 1: Move files
     shutil.move(old_path, new_path)
 
-    # Step 2: Remove from Medusa and re-add at new location
+    # Step 2: Remove from Medusa, wait for it to process, then re-add
     try:
         medusa.delete_show(show_slug, remove_files=False)
+        time.sleep(5)  # Give Medusa time to fully process the removal
         medusa.add_show(tvdb_id, new_path)
     except Exception as e:
-        # Rollback: move files back
+        # Rollback: move files back and re-add at old location
         try:
             shutil.move(new_path, old_path)
+        except Exception:
+            pass
+        time.sleep(3)
+        try:
+            medusa.add_show(tvdb_id, old_path)
         except Exception:
             pass
         raise e
