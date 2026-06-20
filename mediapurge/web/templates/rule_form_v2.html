@@ -113,7 +113,7 @@
 
       <label>On trigger</label>
       <div style="margin:0.3rem 0;">
-        <label style="display:block;"><input type="radio" name="trigger_action_{{ loop.index0 }}" value="delete" {{ "checked" if t.get("action","delete") == "delete" }}> Delete immediately</label>
+        <label style="display:block;"><input type="radio" name="trigger_action_{{ loop.index0 }}" value="delete" {{ "checked" if t.get("action","delete") == "delete" }}> <span class="trigger-immediate-label">Delete immediately</span></label>
         <label style="display:block;"><input type="radio" name="trigger_action_{{ loop.index0 }}" value="confirm" {{ "checked" if t.get("action") == "confirm" }}> Confirm first</label>
       </div>
 
@@ -168,6 +168,9 @@ function updateVisibility() {
   document.getElementById('f-triggers').style.display = (action === 'delete' || action === 'move') ? '' : 'none';
   document.getElementById('f-move-dest').style.display = action === 'move' ? '' : 'none';
   document.getElementById('lbl-unit').textContent = (mode && mode.value === 'season') ? 'seasons' : 'episodes';
+  // Update trigger action labels
+  var actionLabel = action === 'move' ? 'Move immediately' : 'Delete immediately';
+  document.querySelectorAll('.trigger-immediate-label').forEach(function(el) { el.textContent = actionLabel; });
 }
 
 function updateTriggerVisibility(card) {
@@ -191,8 +194,11 @@ function updateTriggerVisibility(card) {
 function setTriggerDefaults(card) {
   var type = card.querySelector('.trigger-type').value;
   var actionRadios = card.querySelectorAll('input[type="radio"]');
-  // Default: inactivity/age → confirm, watched → delete immediately
-  if (type === 'inactive' || type === 'age') {
+  var ruleAction = document.getElementById('action').value;
+  // Default: move → always immediate, delete + inactivity/age → confirm, delete + watched → immediate
+  if (ruleAction === 'move') {
+    actionRadios[0].checked = true;
+  } else if (type === 'inactive' || type === 'age') {
     actionRadios[1].checked = true;
   } else {
     actionRadios[0].checked = true;
