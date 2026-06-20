@@ -763,23 +763,30 @@ def execute_moves(report: EngineReport):
 
         # Restore watch status after Plex re-discovers the files
         import time
-        time.sleep(10)  # Wait for Plex scan to complete
+        time.sleep(10)  # Wait for Plex scan to begin processing
+
+        def _find_item(server, title, retries=3):
+            """Find an item by title, with retries for scan delay."""
+            for _ in range(retries):
+                for section in server.library.sections():
+                    try:
+                        for item in section.search(title):
+                            if item.title == title:
+                                return item
+                    except Exception:
+                        continue
+                time.sleep(5)
+            return None
+
         try:
             server = plex._server()
             for result in report.results:
                 if result.action != "move" or result.rating_key not in watch_status:
                     continue
                 status = watch_status[result.rating_key]
-                # Find the item at its new location by searching
-                found = None
-                for section in server.library.sections():
-                    for item in section.search(result.title):
-                        if item.title == result.title:
-                            found = item
-                            break
-                    if found:
-                        break
+                found = _find_item(server, result.title)
                 if not found:
+                    log.warning(f"Could not find {result.title} in Plex after move")
                     continue
                 if hasattr(found, "episodes"):
                     for ep in found.episodes():
