@@ -1,5 +1,7 @@
 # MediaPurge
 
+<p align="center"><img src="MediaPurge.png" alt="MediaPurge" width="200"></p>
+
 Automated media lifecycle management for Plex. Manages deletion of watched media across Plex, Sonarr, Radarr, Medusa, and Ombi based on configurable rules.
 
 ## What It Does
