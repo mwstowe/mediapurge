@@ -55,6 +55,7 @@
 {% endif %}
 
 {% set deletions = report.results | selectattr("action", "equalto", "delete") | list %}
+{% set moves = report.results | selectattr("action", "equalto", "move") | list %}
 {% set pending = report.results | selectattr("action", "equalto", "pending_confirm") | list %}
 
 {% if deletions %}
@@ -72,6 +73,21 @@
 </table>
 {% else %}
 <p style="margin-top:1.5rem;">No deletions.</p>
+{% endif %}
+
+{% if moves %}
+<h2 style="margin-top:1.5rem;">{{ "Moved" if ran else "Would Move" }} ({{ moves | length }})</h2>
+<table>
+  <tr><th>Title</th><th>From</th><th>To</th><th>Reason</th></tr>
+  {% for r in moves %}
+  <tr>
+    <td>{{ r.title }}</td>
+    <td>{{ r.manager }}</td>
+    <td>{{ r.move_to }}</td>
+    <td>{{ r.reason }}</td>
+  </tr>
+  {% endfor %}
+</table>
 {% endif %}
 
 {% if pending %}

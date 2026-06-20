@@ -442,6 +442,23 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
             manager, manager_id = find_manager(item)
 
             for r in rules:
+                # Move rules always operate at the show/movie level
+                if r.action == "move" and hasattr(item, "episodes"):
+                    action, reason, trigger = evaluate_item(item, r)
+                    if action == "move":
+                        report.results.append(EvalResult(
+                            title=title, rating_key=key, action="move",
+                            rule_id=r.id, trigger_id=trigger.id if trigger else None,
+                            reason=reason, manager=manager, manager_id=manager_id,
+                            move_to=r.move_to,
+                        ))
+                        session.add(ActionLog(
+                            media_title=title, plex_rating_key=key, rule_id=r.id,
+                            action_taken="move", dry_run=dry_run,
+                            details=json.dumps({"reason": reason, "move_to": r.move_to}),
+                        ))
+                    break
+
                 # Show-scoped rules evaluate per-episode
                 if r.scope in ("show", "library") and hasattr(item, "episodes"):
                     triggered = False
