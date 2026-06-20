@@ -49,7 +49,7 @@
     <select name="move_to" id="move_to" style="max-width:100%;">
       <option value="">— Select destination —</option>
       {% for d in move_destinations %}
-      <option value="{{ d.path }}" {{ "selected" if rule and rule.move_to == d.path }}>{{ d.path }} [{{ d.managers }}] → Plex: {{ d.plex_library }}</option>
+      <option value="{{ d.value }}" {{ "selected" if rule and rule.move_to == d.value }}>{{ d.path }} [{{ d.manager }}] → Plex: {{ d.plex_library }}</option>
       {% endfor %}
     </select>
   </div>

@@ -119,3 +119,14 @@ def rescan_series(series_id: int):
     r = requests.post(f"{url}/api/v3/command", headers=headers,
                       json={"name": "RescanSeries", "seriesId": series_id})
     r.raise_for_status()
+
+
+def unmonitor_series(series_id: int):
+    """Unmonitor an entire series so Sonarr won't search for anything."""
+    url, headers = _base()
+    r = requests.get(f"{url}/api/v3/series/{series_id}", headers=headers)
+    r.raise_for_status()
+    series = r.json()
+    series["monitored"] = False
+    r = requests.put(f"{url}/api/v3/series/{series_id}", headers=headers, json=series)
+    r.raise_for_status()

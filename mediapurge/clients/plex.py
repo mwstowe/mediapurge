@@ -321,5 +321,14 @@ def get_move_destinations() -> list[dict]:
                 info["plex_library"] = lib_name
                 break
 
-    return [{"path": p, "managers": ", ".join(d["managers"]), "plex_library": d["plex_library"] or "—"}
-            for p, d in sorted(destinations.items())]
+    # Produce one entry per manager+path so user explicitly chooses which manager
+    result = []
+    for p, d in sorted(destinations.items()):
+        for mgr in d["managers"]:
+            result.append({
+                "value": f"{mgr.lower()}:{p}",
+                "path": p,
+                "manager": mgr,
+                "plex_library": d["plex_library"] or "—",
+            })
+    return result

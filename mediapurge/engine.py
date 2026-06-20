@@ -686,32 +686,37 @@ def execute_moves(report: EngineReport):
 def _do_move(result: EvalResult, dest: str):
     """Execute a move with pre-flight checks and safe ordering.
     
-    Strategy: add to destination manager FIRST (at old path), verify it works,
-    then move files, then remove from source. If any step fails early, nothing changes.
+    dest format: "manager:path" (e.g., "medusa:/pub/video/Anime") or just a path.
     """
     import os
     import shutil
 
-    dest_manager = _path_to_manager(dest)
+    # Parse destination manager and path
+    if ":" in dest and not dest.startswith("/"):
+        dest_manager, dest_path = dest.split(":", 1)
+    else:
+        dest_path = dest
+        dest_manager = _path_to_manager(dest_path)
+
+    dest_path = dest_path.rstrip("/")
 
     # --- Pre-flight checks ---
-    # Check destination is writable
-    if not os.access(dest, os.W_OK):
-        raise PermissionError(f"Destination not writable: {dest}")
+    if not os.path.isdir(dest_path):
+        raise FileNotFoundError(f"Destination directory does not exist: {dest_path}")
+    if not os.access(dest_path, os.W_OK):
+        raise PermissionError(f"Destination not writable: {dest_path}")
 
     # Get source path and check disk space
     source_path = None
-    if result.manager in ("sonarr", "medusa", "none"):
-        try:
-            server = plex._server()
-            item = server.fetchItem(int(result.rating_key))
-            paths = plex.get_file_paths(item)
-            source_path = paths[0] if paths else None
-        except Exception:
-            pass
+    try:
+        server = plex._server()
+        item = server.fetchItem(int(result.rating_key))
+        paths = plex.get_file_paths(item)
+        source_path = paths[0] if paths else None
+    except Exception:
+        pass
 
     if source_path and os.path.exists(source_path):
-        # Check disk space (source size vs destination free space)
         source_size = 0
         if os.path.isdir(source_path):
             for root, _, files in os.walk(source_path):
@@ -719,33 +724,41 @@ def _do_move(result: EvalResult, dest: str):
                     source_size += os.path.getsize(os.path.join(root, f))
         else:
             source_size = os.path.getsize(source_path)
-        free_space = shutil.disk_usage(dest).free
-        if source_size > free_space * 0.95:  # 5% safety margin
-            raise OSError(f"Insufficient disk space: need {source_size}, have {free_space}")
+        # Only check space if moving across filesystems
+        src_dev = os.stat(source_path).st_dev
+        dst_dev = os.stat(dest_path).st_dev
+        if src_dev != dst_dev:
+            free_space = shutil.disk_usage(dest_path).free
+            if source_size > free_space * 0.95:
+                raise OSError(f"Insufficient disk space: need {source_size}, have {free_space}")
 
     # --- Execute move ---
     if result.manager == "radarr":
-        # Radarr handles moves atomically via its own API
-        radarr.move_movie(int(result.manager_id), dest)
+        if dest_manager == "radarr":
+            radarr.move_movie(int(result.manager_id), dest_path)
+        else:
+            raise ValueError(f"Cannot move Radarr movie to {dest_manager}")
 
     elif result.manager == "sonarr":
         if dest_manager == "sonarr":
-            # Sonarr handles internal moves atomically
-            sonarr.move_series(int(result.manager_id), dest)
+            sonarr.move_series(int(result.manager_id), dest_path)
         elif dest_manager == "medusa":
-            _move_sonarr_to_medusa(result, dest)
+            _move_sonarr_to_medusa(result, dest_path)
+        else:
+            raise ValueError(f"Cannot move Sonarr series to {dest_manager}")
 
     elif result.manager == "medusa":
         if dest_manager == "medusa":
-            _move_medusa_to_medusa(result, dest)
+            _move_medusa_to_medusa(result, dest_path)
         elif dest_manager == "sonarr":
-            _move_medusa_to_sonarr(result, dest)
+            _move_medusa_to_sonarr(result, dest_path)
+        else:
+            raise ValueError(f"Cannot move Medusa show to {dest_manager}")
 
     elif result.manager == "none":
-        # Orphan — just move the files
         if source_path and os.path.exists(source_path):
             show_folder = source_path.rstrip("/").split("/")[-1]
-            new_path = f"{dest}/{show_folder}"
+            new_path = f"{dest_path}/{show_folder}"
             if source_path.rstrip("/") != new_path.rstrip("/"):
                 shutil.move(source_path, new_path)
 
@@ -771,6 +784,9 @@ def _move_sonarr_to_medusa(result: EvalResult, dest: str):
     # Get episode status before any changes
     sonarr_eps = sonarr.get_episodes(int(result.manager_id))
     unmonitored_eps = [(e["seasonNumber"], e["episodeNumber"]) for e in sonarr_eps if not e["monitored"]]
+
+    # Unmonitor series in Sonarr to prevent processing during move
+    sonarr.unmonitor_series(int(result.manager_id))
 
     # Step 1: Move files to new location
     if old_path.rstrip("/") != new_path.rstrip("/"):
