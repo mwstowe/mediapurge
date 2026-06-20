@@ -77,23 +77,33 @@ def get_root_folders() -> list[str]:
 
 
 def add_show(tvdb_id: int, location: str, anime: bool = False, show_list: str = None, default_status: str = "Wanted"):
-    """Add a show to Medusa with proper configuration."""
+    """Add a show to Medusa, then patch its config (Medusa ignores config at add time)."""
+    import time
     url, headers = _base()
-    config = {
-        "location": location,
-        "defaultEpisodeStatus": default_status,
-        "anime": anime,
-        "seasonFolders": False,
-    }
-    if show_list:
-        config["showLists"] = [show_list]
-    elif anime:
-        config["showLists"] = ["anime"]
 
+    # Step 1: Add the show (Medusa ignores config in POST)
     r = requests.post(
         f"{url}/api/v2/series",
         headers=headers,
-        json={"id": {"tvdb": tvdb_id}, "config": config},
+        json={"id": {"tvdb": tvdb_id}},
         verify=False,
     )
     r.raise_for_status()
+
+    # Step 2: Wait for Medusa to process the add
+    slug = f"tvdb{tvdb_id}"
+    time.sleep(5)
+
+    # Step 3: Patch the config to set correct location, type, and category
+    config_patch = {"config": {"location": location, "anime": anime}}
+    if show_list:
+        config_patch["config"]["showLists"] = [show_list]
+    elif anime:
+        config_patch["config"]["showLists"] = ["anime"]
+    if default_status:
+        config_patch["config"]["defaultEpisodeStatus"] = default_status
+
+    r = requests.patch(f"{url}/api/v2/series/{slug}", headers=headers, json=config_patch, verify=False)
+    # Also patch showType at root level
+    if anime:
+        requests.patch(f"{url}/api/v2/series/{slug}", headers=headers, json={"showType": "anime"}, verify=False)
