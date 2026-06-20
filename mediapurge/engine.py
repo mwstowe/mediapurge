@@ -706,6 +706,23 @@ def execute_deletions(report: EngineReport):
 def execute_moves(report: EngineReport):
     """Perform moves for items marked 'move' in the report."""
     rules_to_retire = set()
+    # Capture watch status before moves
+    watch_status = {}  # rating_key -> {ep_key: watched}
+    for result in report.results:
+        if result.action != "move" or not result.move_to:
+            continue
+        try:
+            server = plex._server()
+            item = server.fetchItem(int(result.rating_key))
+            if hasattr(item, "episodes"):
+                watch_status[result.rating_key] = {
+                    (ep.parentIndex, ep.index): ep.isWatched for ep in item.episodes()
+                }
+            else:
+                watch_status[result.rating_key] = {"item": item.isWatched}
+        except Exception:
+            pass
+
     for result in report.results:
         if result.action != "move" or not result.move_to:
             continue
@@ -743,6 +760,37 @@ def execute_moves(report: EngineReport):
                 plex.scan_library(lib_name)
         except Exception:
             pass
+
+        # Restore watch status after Plex re-discovers the files
+        import time
+        time.sleep(10)  # Wait for Plex scan to complete
+        try:
+            server = plex._server()
+            for result in report.results:
+                if result.action != "move" or result.rating_key not in watch_status:
+                    continue
+                status = watch_status[result.rating_key]
+                # Find the item at its new location by searching
+                found = None
+                for section in server.library.sections():
+                    for item in section.search(result.title):
+                        if item.title == result.title:
+                            found = item
+                            break
+                    if found:
+                        break
+                if not found:
+                    continue
+                if hasattr(found, "episodes"):
+                    for ep in found.episodes():
+                        key = (ep.parentIndex, ep.index)
+                        if status.get(key):
+                            ep.markWatched()
+                elif status.get("item"):
+                    found.markWatched()
+                log.info(f"Restored watch status for {result.title}")
+        except Exception as e:
+            log.warning(f"Failed to restore watch status: {e}")
 
 
 def _do_move(result: EvalResult, dest: str):
