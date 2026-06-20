@@ -4,10 +4,23 @@
 {% if breadcrumb %}
 <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;padding:0.75rem;background:#16213e;border-radius:8px;">
   <img src="{{ url_for('plex_thumb', path=breadcrumb.thumb) }}" style="height:60px;border-radius:6px;" alt="">
-  <div>
+  <div style="flex:1;">
     <strong style="font-size:1.1rem;">{{ breadcrumb.title }}</strong>
     {% if breadcrumb.year %}<span style="color:#aaa;"> ({{ breadcrumb.year }})</span>{% endif %}
     <br><span style="color:#aaa;font-size:0.85rem;">{{ request.args.get("scope", "") | title }} Rule</span>
+  </div>
+  <div style="display:flex;gap:0.5rem;align-items:center;">
+    <form method="post" action="{{ url_for('immediate_delete', rating_key=request.args.get('plex_rating_key', 0)) }}" style="margin:0;">
+      <button class="btn btn-danger btn-sm" onclick="return confirm('Delete {{ breadcrumb.title }} NOW?')">Delete Now</button>
+    </form>
+    <form method="post" action="{{ url_for('immediate_move', rating_key=request.args.get('plex_rating_key', 0)) }}" style="margin:0;display:flex;gap:0.3rem;align-items:center;">
+      <select name="move_to" style="font-size:0.8rem;padding:0.2rem;max-width:150px;">
+        {% for d in move_destinations %}
+        <option value="{{ d.value }}">{{ d.plex_library }} [{{ d.manager }}]</option>
+        {% endfor %}
+      </select>
+      <button class="btn btn-primary btn-sm">Move Now</button>
+    </form>
   </div>
 </div>
 {% endif %}

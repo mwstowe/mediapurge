@@ -52,13 +52,12 @@
     <td>
       {% if rules_by_key and item.rating_key | string in rules_by_key %}
         {% set r = rules_by_key[item.rating_key | string] %}
-        <a href="{{ url_for('rules_edit', rule_id=r.id) }}" class="btn btn-sm btn-primary">✎ {% if r.max_days_inactive %}inactive {{ r.max_days_inactive }}d{% elif r.all_watched %}all watched{% elif r.delete_by_season %}by season{% else %}watched {{ r.min_days_watched }}d{% endif %}</a>
+        <a href="{{ url_for('rules_edit', rule_id=r.id) }}" class="btn btn-sm btn-primary">✎</a>
+      {% endif %}
+      {% if item.type == "show" %}
+        <a href="{{ url_for('rules_new') }}?scope=show&plex_rating_key={{ item.rating_key }}&media_title={{ item.title }}&type=show" class="btn btn-sm btn-primary" style="opacity:0.6;">+</a>
       {% else %}
-        {% if item.type == "show" %}
-          <a href="{{ url_for('rules_new') }}?scope=show&plex_rating_key={{ item.rating_key }}&media_title={{ item.title }}&type=show" class="btn btn-sm btn-primary" style="opacity:0.6;">+</a>
-        {% else %}
-          <a href="{{ url_for('rules_new') }}?scope=show&plex_rating_key={{ item.rating_key }}&media_title={{ item.title }}&type=movie" class="btn btn-sm btn-primary" style="opacity:0.6;">+</a>
-        {% endif %}
+        <a href="{{ url_for('rules_new') }}?scope=show&plex_rating_key={{ item.rating_key }}&media_title={{ item.title }}&type=movie" class="btn btn-sm btn-primary" style="opacity:0.6;">+</a>
       {% endif %}
     </td>
   </tr>

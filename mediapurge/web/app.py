@@ -463,9 +463,66 @@ def create_app() -> Flask:
             pass
         return redirect(url_for("browse_library", library=library))
 
+    @app.route("/immediate/delete/<int:rating_key>", methods=["POST"])
+    @login_required
+    def immediate_delete(rating_key):
+        """Immediately delete an item."""
+        from mediapurge.clients import plex as plex_client
+        from mediapurge.engine import find_manager, _delete_direct, EvalResult
+        from mediapurge.clients import sonarr, radarr, medusa
+        server = plex_client._server()
+        item = server.fetchItem(rating_key)
+        manager, manager_id = find_manager(item)
+        result = EvalResult(title=item.title, rating_key=str(rating_key), action="delete",
+                            manager=manager, manager_id=manager_id)
+        try:
+            if manager == "sonarr":
+                sonarr.delete_series(int(manager_id), delete_files=True)
+            elif manager == "radarr":
+                radarr.delete_movie(int(manager_id), delete_files=True)
+            elif manager == "medusa":
+                medusa.delete_show(str(manager_id), remove_files=True)
+                _delete_direct(result)
+            else:
+                _delete_direct(result)
+            db = get_session()
+            db.add(ActionLog(media_title=item.title, plex_rating_key=str(rating_key),
+                             action_taken="delete", details="immediate"))
+            db.commit(); db.close()
+            plex_client.scan_library(item.librarySectionTitle)
+        except Exception:
+            pass
+        return redirect(url_for("rules_list"))
+
+    @app.route("/immediate/move/<int:rating_key>", methods=["POST"])
+    @login_required
+    def immediate_move(rating_key):
+        """Immediately move an item."""
+        from mediapurge.clients import plex as plex_client
+        from mediapurge.engine import find_manager, _do_move, EvalResult
+        dest = request.form.get("move_to", "")
+        if not dest:
+            return redirect(url_for("rules_list"))
+        server = plex_client._server()
+        item = server.fetchItem(rating_key)
+        manager, manager_id = find_manager(item)
+        result = EvalResult(title=item.title, rating_key=str(rating_key), action="move",
+                            manager=manager, manager_id=manager_id, move_to=dest)
+        try:
+            _do_move(result, dest)
+            db = get_session()
+            db.add(ActionLog(media_title=item.title, plex_rating_key=str(rating_key),
+                             action_taken="move", details=f"immediate to {dest}"))
+            db.commit(); db.close()
+            plex_client.scan_library(item.librarySectionTitle)
+        except Exception:
+            pass
+        return redirect(url_for("rules_list"))
+
     @app.route("/plex_thumb")
     @login_required
     def plex_thumb():
+
         """Proxy Plex thumbnails."""
         import requests as req
         thumb_path = request.args.get("path", "")
