@@ -995,9 +995,20 @@ def _move_medusa_to_sonarr(result: EvalResult, dest: str):
     if old_path.rstrip("/") != new_path.rstrip("/"):
         shutil.move(old_path, new_path)
 
-    # Step 2: Add to Sonarr at the destination root folder
+    # Step 2: Add to Sonarr (or update path if already there)
     try:
-        new_series_id = sonarr.add_series(tvdb_id, show_info.get("title", ""), dest)
+        existing = sonarr.get_series_by_path(new_path) or sonarr.get_series_by_path(old_path)
+        if not existing:
+            # Check by TVDB ID
+            for s in sonarr.get_all_series():
+                if s.get("tvdbId") == tvdb_id:
+                    existing = s
+                    break
+        if existing:
+            new_series_id = existing["id"]
+            sonarr.move_series(new_series_id, dest)
+        else:
+            new_series_id = sonarr.add_series(tvdb_id, show_info.get("title", ""), dest)
     except Exception as e:
         # Rollback: move files back
         if old_path.rstrip("/") != new_path.rstrip("/"):
