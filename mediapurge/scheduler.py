@@ -45,6 +45,7 @@ def _run_maintenance():
     from mediapurge.engine import (
         execute_deletions, process_pending_actions, run_evaluation, sync_managed_media,
     )
+    from mediapurge.engine import execute_moves
     from mediapurge import notify
 
     cfg = get_config()
@@ -57,8 +58,10 @@ def _run_maintenance():
         process_pending_actions()
         if not dry_run:
             execute_deletions(report)
+            execute_moves(report)
 
         deletions = [r for r in report.results if r.action == "delete"]
+        moves = [r for r in report.results if r.action == "move"]
         pending = [r for r in report.results if r.action == "pending_confirm"]
         total_bytes = sum(r.file_size for r in deletions)
 

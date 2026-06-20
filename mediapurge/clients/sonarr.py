@@ -72,3 +72,42 @@ def unmonitor_episodes(episode_ids: list[int]):
     r = requests.put(f"{url}/api/v3/episode/monitor", headers=headers,
                      json={"episodeIds": episode_ids, "monitored": False})
     r.raise_for_status()
+
+
+def get_root_folders() -> list[str]:
+    url, headers = _base()
+    r = requests.get(f"{url}/api/v3/rootfolder", headers=headers)
+    r.raise_for_status()
+    return [f["path"] for f in r.json()]
+
+
+def move_series(series_id: int, new_root_folder: str):
+    """Move a series to a new root folder."""
+    url, headers = _base()
+    r = requests.get(f"{url}/api/v3/series/{series_id}", headers=headers)
+    r.raise_for_status()
+    series = r.json()
+    old_path = series["path"]
+    show_folder = old_path.rstrip("/").split("/")[-1]
+    series["path"] = f"{new_root_folder.rstrip('/')}/{show_folder}"
+    series["rootFolderPath"] = new_root_folder
+    r = requests.put(f"{url}/api/v3/series/{series_id}?moveFiles=true", headers=headers, json=series)
+    r.raise_for_status()
+
+
+def add_series(tvdb_id: int, title: str, root_folder: str):
+    """Add a series to Sonarr."""
+    url, headers = _base()
+    # Lookup the series first
+    r = requests.get(f"{url}/api/v3/series/lookup?term=tvdb:{tvdb_id}", headers=headers)
+    r.raise_for_status()
+    results = r.json()
+    if not results:
+        raise ValueError(f"Series tvdb:{tvdb_id} not found in Sonarr lookup")
+    series = results[0]
+    series["rootFolderPath"] = root_folder
+    series["monitored"] = True
+    series["addOptions"] = {"searchForMissingEpisodes": False}
+    r = requests.post(f"{url}/api/v3/series", headers=headers, json=series)
+    r.raise_for_status()
+    return r.json()["id"]

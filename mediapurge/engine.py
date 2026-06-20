@@ -29,6 +29,7 @@ class EvalResult:
     manager_id: int | None = None
     notified_at: str | None = None
     file_size: int = 0
+    move_to: str | None = None
 
 
 @dataclass
@@ -200,8 +201,9 @@ def _check_trigger(item, trigger: Trigger, rule: Rule) -> tuple[str | None, str]
         days = plex.days_since_watched(last_viewed)
         if days is None or days < trigger.days:
             return None, ""
-        action = "pending_confirm" if trigger.action == "confirm" else "delete"
-        return action, f"watched {days}d ago by {rule.watched_by}"
+        if trigger.action == "confirm":
+            return "pending_confirm", f"watched {days}d ago by {rule.watched_by}"
+        return rule.action, f"watched {days}d ago by {rule.watched_by}"
 
     elif trigger.type == "inactive":
         last_viewed_at = plex._to_utc(getattr(item, "lastViewedAt", None))
@@ -219,15 +221,17 @@ def _check_trigger(item, trigger: Trigger, rule: Rule) -> tuple[str | None, str]
         if inactive < trigger.days:
             return None, ""
         label = f"inactive {inactive}d" if last_viewed_at else f"never watched, added {inactive}d ago"
-        action = "pending_confirm" if trigger.action == "confirm" else "delete"
-        return action, f"{label} (limit {trigger.days}d)"
+        if trigger.action == "confirm":
+            return "pending_confirm", f"{label} (limit {trigger.days}d)"
+        return rule.action, f"{label} (limit {trigger.days}d)"
 
     elif trigger.type == "age":
         age = plex.days_since_added(item)
         if age < trigger.days:
             return None, ""
-        action = "pending_confirm" if trigger.action == "confirm" else "delete"
-        return action, f"exceeded max age ({age} >= {trigger.days} days)"
+        if trigger.action == "confirm":
+            return "pending_confirm", f"exceeded max age ({age} >= {trigger.days} days)"
+        return rule.action, f"exceeded max age ({age} >= {trigger.days} days)"
 
     return None, ""
 
@@ -509,6 +513,7 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
                         title=title, rating_key=key, action=action,
                         rule_id=r.id, trigger_id=trigger.id if trigger else None,
                         reason=reason, manager=manager, manager_id=manager_id,
+                        move_to=r.move_to if action == "move" else None,
                     )
                     report.results.append(result)
                     if action == "delete":
@@ -516,6 +521,12 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
                             media_title=title, plex_rating_key=key, rule_id=r.id,
                             action_taken="delete", dry_run=dry_run,
                             details=json.dumps({"reason": reason, "manager": manager}),
+                        ))
+                    elif action == "move":
+                        session.add(ActionLog(
+                            media_title=title, plex_rating_key=key, rule_id=r.id,
+                            action_taken="move", dry_run=dry_run,
+                            details=json.dumps({"reason": reason, "manager": manager, "move_to": r.move_to}),
                         ))
                     elif action == "pending_confirm":
                         _handle_pending_confirm(session, r, trigger, key, title, dry_run)
@@ -647,6 +658,126 @@ def execute_deletions(report: EngineReport):
             log.info("Triggered Plex library scan")
         except Exception as e:
             log.warning(f"Failed to trigger Plex scan: {e}")
+
+
+def execute_moves(report: EngineReport):
+    """Perform moves for items marked 'move' in the report."""
+    for result in report.results:
+        if result.action != "move" or not result.move_to:
+            continue
+
+        try:
+            dest = result.move_to.rstrip("/")
+            _do_move(result, dest)
+            log.info(f"Moved: {result.title} to {dest} via {result.manager}")
+        except Exception as e:
+            log.error(f"Failed to move {result.title}: {e}")
+            report.errors.append(f"Move failed for {result.title}: {e}")
+
+    # Scan Plex libraries to reflect moves
+    if any(r.action == "move" for r in report.results):
+        try:
+            for lib_name, _ in plex.get_libraries():
+                plex.scan_library(lib_name)
+        except Exception:
+            pass
+
+
+def _do_move(result: EvalResult, dest: str):
+    """Execute a move based on source and destination managers."""
+    import os
+    import shutil
+
+    # Determine destination manager
+    dest_manager = _path_to_manager(dest)
+
+    if result.manager == "radarr":
+        radarr.move_movie(int(result.manager_id), dest)
+
+    elif result.manager == "sonarr":
+        if dest_manager == "sonarr":
+            sonarr.move_series(int(result.manager_id), dest)
+        elif dest_manager == "medusa":
+            # Get show info before removing from Sonarr
+            from mediapurge.config import get_config
+            import requests
+            cfg = get_config()["sonarr"]
+            headers = {"X-Api-Key": cfg["api_key"]}
+            r = requests.get(f"{cfg['url']}/api/v3/series/{result.manager_id}", headers=headers)
+            series = r.json()
+            tvdb_id = series.get("tvdbId")
+            old_path = series["path"]
+            show_folder = old_path.rstrip("/").split("/")[-1]
+            new_path = f"{dest}/{show_folder}"
+            # Move files if paths differ
+            if old_path.rstrip("/") != new_path.rstrip("/"):
+                shutil.move(old_path, new_path)
+            # Remove from Sonarr (without deleting files)
+            sonarr.delete_series(int(result.manager_id), delete_files=False)
+            # Add to Medusa
+            medusa.add_show(tvdb_id, new_path)
+
+    elif result.manager == "medusa":
+        # Get show info
+        show_slug = str(result.manager_id)
+        shows = medusa.get_all_shows()
+        show_info = next((s for s in shows if s.get("id", {}).get("slug") == show_slug), None)
+        if not show_info:
+            raise ValueError(f"Show {show_slug} not found in Medusa")
+        tvdb_id = show_info.get("id", {}).get("tvdb")
+        old_path = show_info.get("config", {}).get("location", "")
+        show_folder = old_path.rstrip("/").split("/")[-1]
+        new_path = f"{dest}/{show_folder}"
+
+        if dest_manager == "medusa":
+            # Move files, remove from Medusa, re-add at new location
+            if old_path.rstrip("/") != new_path.rstrip("/"):
+                shutil.move(old_path, new_path)
+            medusa.delete_show(show_slug, remove_files=False)
+            medusa.add_show(tvdb_id, new_path)
+        elif dest_manager == "sonarr":
+            # Move files if paths differ
+            if old_path.rstrip("/") != new_path.rstrip("/"):
+                shutil.move(old_path, new_path)
+            # Remove from Medusa (without deleting files)
+            medusa.delete_show(show_slug, remove_files=False)
+            # Add to Sonarr
+            sonarr.add_series(tvdb_id, show_info.get("title", ""), dest)
+
+    elif result.manager == "none":
+        # Orphan — just move the files
+        server = plex._server()
+        item = server.fetchItem(int(result.rating_key))
+        paths = plex.get_file_paths(item)
+        for old_path in paths:
+            show_folder = old_path.rstrip("/").split("/")[-1]
+            new_path = f"{dest}/{show_folder}"
+            if old_path.rstrip("/") != new_path.rstrip("/"):
+                shutil.move(old_path, new_path)
+
+
+def _path_to_manager(path: str) -> str:
+    """Determine which manager owns a destination path."""
+    path = path.rstrip("/")
+    try:
+        for folder in sonarr.get_root_folders():
+            if path.rstrip("/") == folder.rstrip("/") or path.startswith(folder.rstrip("/") + "/"):
+                return "sonarr"
+    except Exception:
+        pass
+    try:
+        for folder in radarr.get_root_folders():
+            if path.rstrip("/") == folder.rstrip("/") or path.startswith(folder.rstrip("/") + "/"):
+                return "radarr"
+    except Exception:
+        pass
+    try:
+        for folder in medusa.get_root_folders():
+            if path.rstrip("/") == folder.rstrip("/") or path.startswith(folder.rstrip("/") + "/"):
+                return "medusa"
+    except Exception:
+        pass
+    return "none"
 
 
 def _remove_empty_shows(report: EngineReport):

@@ -41,7 +41,14 @@
   <select name="action" id="action">
     <option value="keep" {{ "selected" if rule and rule.action == "keep" }}>Keep — protect from broader delete rules</option>
     <option value="delete" {{ "selected" if (rule and rule.action == "delete") or not rule }}>Delete — remove when conditions are met</option>
+    <option value="move" {{ "selected" if rule and rule.action == "move" }}>Move — relocate when conditions are met</option>
   </select>
+
+  <div id="f-move-dest">
+    <label for="move_to">Move destination</label>
+    <input name="move_to" id="move_to" value="{{ rule.move_to or '' if rule else '' }}" placeholder="/pub/video/Archive">
+    <small style="color:#aaa;">Root folder path managed by Sonarr, Radarr, or Medusa</small>
+  </div>
 </fieldset>
 
 <!-- EPISODE HANDLING (shows only) -->
@@ -152,9 +159,10 @@ function updateVisibility() {
 
   document.getElementById('f-library').style.display = scope === 'library' ? '' : 'none';
   document.getElementById('f-ratingkey').style.display = scope !== 'library' ? '' : 'none';
-  document.getElementById('f-episode-opts').style.display = (action === 'delete') ? '' : 'none';
-  document.getElementById('f-show-only').style.display = (action === 'delete' && !isMovie) ? '' : 'none';
-  document.getElementById('f-triggers').style.display = action === 'delete' ? '' : 'none';
+  document.getElementById('f-episode-opts').style.display = (action === 'delete' || action === 'move') ? '' : 'none';
+  document.getElementById('f-show-only').style.display = ((action === 'delete' || action === 'move') && !isMovie) ? '' : 'none';
+  document.getElementById('f-triggers').style.display = (action === 'delete' || action === 'move') ? '' : 'none';
+  document.getElementById('f-move-dest').style.display = action === 'move' ? '' : 'none';
   document.getElementById('lbl-unit').textContent = (mode && mode.value === 'season') ? 'seasons' : 'episodes';
 }
 

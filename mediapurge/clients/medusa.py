@@ -62,3 +62,27 @@ def refresh_show(show_slug: str):
         verify=False,
     )
     r.raise_for_status()
+
+
+def get_root_folders() -> list[str]:
+    """Get unique root folders from Medusa's managed shows."""
+    folders = set()
+    for s in get_all_shows():
+        path = s.get("config", {}).get("location", "")
+        if path:
+            # Root folder is the parent of the show folder
+            parent = "/".join(path.rstrip("/").split("/")[:-1])
+            folders.add(parent)
+    return sorted(folders)
+
+
+def add_show(tvdb_id: int, location: str):
+    """Add a show to Medusa."""
+    url, headers = _base()
+    r = requests.post(
+        f"{url}/api/v2/series",
+        headers=headers,
+        json={"id": {"tvdb": tvdb_id}, "config": {"location": location}},
+        verify=False,
+    )
+    r.raise_for_status()

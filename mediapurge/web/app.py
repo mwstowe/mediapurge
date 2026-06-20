@@ -119,6 +119,7 @@ def create_app() -> Flask:
                 plex_rating_key=request.form.get("plex_rating_key") or None,
                 media_title=request.form.get("media_title") or None,
                 action=request.form["action"],
+                move_to=request.form.get("move_to") or None,
                 watched_by=",".join(request.form.getlist("watched_by")) or "any",
                 protect_on_deck="protect_on_deck" in request.form,
                 processing_mode=request.form.get("processing_mode", "episode"),
@@ -167,6 +168,7 @@ def create_app() -> Flask:
             rule.plex_rating_key = request.form.get("plex_rating_key") or None
             rule.media_title = request.form.get("media_title") or None
             rule.action = request.form["action"]
+            rule.move_to = request.form.get("move_to") or None
             rule.watched_by = ",".join(request.form.getlist("watched_by")) or "any"
             rule.protect_on_deck = "protect_on_deck" in request.form
             rule.processing_mode = request.form.get("processing_mode", "episode")
@@ -262,9 +264,10 @@ def create_app() -> Flask:
             sync_managed_media()
             report = run_evaluation(dry_run=dry_run)
             if not dry_run:
-                from mediapurge.engine import execute_deletions, process_pending_actions
+                from mediapurge.engine import execute_deletions, execute_moves, process_pending_actions
                 process_pending_actions()
                 execute_deletions(report)
+                execute_moves(report)
             _task["report"] = report
         except Exception as e:
             _task["error"] = str(e)
