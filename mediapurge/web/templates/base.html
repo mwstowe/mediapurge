@@ -35,7 +35,7 @@ form input[type="checkbox"], form input[type="radio"] { width: auto; }
 <body>
 {% if session.get('authed') %}
 <nav>
-  <img src="{{ url_for('static', filename='logo.png') }}" style="height:28px;vertical-align:middle;" alt="">
+  <img src="{{ url_for('static', filename='logo.png') }}" style="height:42px;vertical-align:middle;" alt="">
   <span class="brand">MediaPurge</span>
   <a href="{{ url_for('dashboard') }}">Dashboard</a>
   <a href="{{ url_for('browse') }}">Browse</a>
