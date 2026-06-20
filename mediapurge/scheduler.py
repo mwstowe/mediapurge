@@ -87,6 +87,11 @@ def _run_maintenance():
             for r in pending:
                 lines.append(f"  • {r.title}")
 
+        if moves:
+            lines.append(f"\nMoved ({len(moves)}):")
+            for r in moves:
+                lines.append(f"  • {r.title} → {r.move_to}")
+
         if report.errors:
             lines.append(f"\nErrors ({len(report.errors)}):")
             for e in report.errors:
@@ -96,7 +101,7 @@ def _run_maintenance():
         log.info(summary)
 
         # Only send email if there's something to report
-        if deletions or pending or report.errors:
+        if deletions or moves or pending or report.errors:
             notify.send("MediaPurge Maintenance", summary)
     except Exception as e:
         log.error(f"Maintenance failed: {e}")
