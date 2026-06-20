@@ -111,3 +111,11 @@ def add_series(tvdb_id: int, title: str, root_folder: str):
     r = requests.post(f"{url}/api/v3/series", headers=headers, json=series)
     r.raise_for_status()
     return r.json()["id"]
+
+
+def rescan_series(series_id: int):
+    """Trigger a disk scan for a series so Sonarr detects existing files."""
+    url, headers = _base()
+    r = requests.post(f"{url}/api/v3/command", headers=headers,
+                      json={"name": "RescanSeries", "seriesId": series_id})
+    r.raise_for_status()

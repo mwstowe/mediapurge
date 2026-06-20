@@ -714,8 +714,13 @@ def _do_move(result: EvalResult, dest: str):
                 shutil.move(old_path, new_path)
             # Remove from Sonarr (without deleting files)
             sonarr.delete_series(int(result.manager_id), delete_files=False)
-            # Add to Medusa
+            # Add to Medusa and refresh so it detects existing files
             medusa.add_show(tvdb_id, new_path)
+            # Find the new slug and refresh
+            for s in medusa.get_all_shows():
+                if s.get("id", {}).get("tvdb") == tvdb_id:
+                    medusa.refresh_show(s["id"]["slug"])
+                    break
 
     elif result.manager == "medusa":
         # Get show info
@@ -741,8 +746,9 @@ def _do_move(result: EvalResult, dest: str):
                 shutil.move(old_path, new_path)
             # Remove from Medusa (without deleting files)
             medusa.delete_show(show_slug, remove_files=False)
-            # Add to Sonarr
-            sonarr.add_series(tvdb_id, show_info.get("title", ""), dest)
+            # Add to Sonarr and trigger disk scan to detect existing files
+            new_series_id = sonarr.add_series(tvdb_id, show_info.get("title", ""), dest)
+            sonarr.rescan_series(new_series_id)
 
     elif result.manager == "none":
         # Orphan — just move the files
