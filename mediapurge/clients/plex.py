@@ -282,11 +282,13 @@ def get_move_destinations() -> list[dict]:
 
     # Get Plex library → path mapping
     lib_paths = {}
+    lib_types = {}
     try:
         server = _server()
         for section in server.library.sections():
             for loc in section.locations:
                 lib_paths[loc.rstrip("/")] = section.title
+                lib_types[loc.rstrip("/")] = section.type
     except Exception:
         pass
 
@@ -319,9 +321,11 @@ def get_move_destinations() -> list[dict]:
         for lib_path, lib_name in lib_paths.items():
             if path == lib_path or lib_path.startswith(path + "/") or path.startswith(lib_path + "/"):
                 info["plex_library"] = lib_name
+                info["lib_type"] = lib_types.get(lib_path, "")
                 break
 
     # Produce one entry per manager+path so user explicitly chooses which manager
+    # Sort: shows first, then movies, alphabetically within each group
     result = []
     for p, d in sorted(destinations.items()):
         for mgr in d["managers"]:
@@ -330,5 +334,7 @@ def get_move_destinations() -> list[dict]:
                 "path": p,
                 "manager": mgr,
                 "plex_library": d["plex_library"] or "—",
+                "lib_type": d.get("lib_type", ""),
             })
+    result.sort(key=lambda x: (0 if x["lib_type"] == "show" else 1, x["path"]))
     return result

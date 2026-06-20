@@ -48,9 +48,16 @@
     <label for="move_to">Move destination</label>
     <select name="move_to" id="move_to" style="max-width:100%;">
       <option value="">— Select destination —</option>
+      {% set current_type = namespace(val='') %}
       {% for d in move_destinations %}
-      <option value="{{ d.value }}" {{ "selected" if rule and rule.move_to == d.value }}>{{ d.path }} [{{ d.manager }}] → Plex: {{ d.plex_library }}</option>
+      {% if d.lib_type != current_type.val %}
+        {% if current_type.val %}</optgroup>{% endif %}
+        {% set current_type.val = d.lib_type %}
+        <optgroup label="{{ 'TV Shows' if d.lib_type == 'show' else 'Movies' if d.lib_type == 'movie' else 'Other' }}">
+      {% endif %}
+      <option value="{{ d.value }}" {{ "selected" if rule and rule.move_to == d.value }}>{{ d.plex_library }} — {{ d.path }} [{{ d.manager }}]</option>
       {% endfor %}
+      {% if current_type.val %}</optgroup>{% endif %}
     </select>
   </div>
 </fieldset>
