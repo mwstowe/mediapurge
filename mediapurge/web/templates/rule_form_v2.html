@@ -164,7 +164,7 @@ function updateVisibility() {
   document.getElementById('f-library').style.display = scope === 'library' ? '' : 'none';
   document.getElementById('f-ratingkey').style.display = scope !== 'library' ? '' : 'none';
   document.getElementById('f-episode-opts').style.display = (action === 'delete' || action === 'move') ? '' : 'none';
-  document.getElementById('f-show-only').style.display = ((action === 'delete' || action === 'move') && !isMovie) ? '' : 'none';
+  document.getElementById('f-show-only').style.display = ((action === 'delete') && !isMovie) ? '' : 'none';
   document.getElementById('f-triggers').style.display = (action === 'delete' || action === 'move') ? '' : 'none';
   document.getElementById('f-move-dest').style.display = action === 'move' ? '' : 'none';
   document.getElementById('lbl-unit').textContent = (mode && mode.value === 'season') ? 'seasons' : 'episodes';
