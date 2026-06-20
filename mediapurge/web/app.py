@@ -433,6 +433,9 @@ def create_app() -> Flask:
             db = get_session()
             db.add(ActionLog(media_title=item.title, plex_rating_key=str(rating_key),
                              action_taken="delete", details="immediate from browse"))
+            # Purge any rules targeting this item
+            for r in db.query(Rule).filter(Rule.plex_rating_key == str(rating_key)).all():
+                db.delete(r)
             db.commit()
             db.close()
         except Exception:
@@ -489,6 +492,9 @@ def create_app() -> Flask:
             db = get_session()
             db.add(ActionLog(media_title=item.title, plex_rating_key=str(rating_key),
                              action_taken="delete", details="immediate"))
+            # Purge any rules targeting this item
+            for r in db.query(Rule).filter(Rule.plex_rating_key == str(rating_key)).all():
+                db.delete(r)
             db.commit(); db.close()
             plex_client.scan_library(item.librarySectionTitle)
         except Exception:
