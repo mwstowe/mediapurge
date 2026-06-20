@@ -927,8 +927,9 @@ def _move_sonarr_to_medusa(result: EvalResult, dest: str):
         shutil.move(old_path, new_path)
 
     # Step 2: Add to Medusa at new path
+    is_anime = "anime" in dest_path.lower()
     try:
-        medusa.add_show(tvdb_id, new_path)
+        medusa.add_show(tvdb_id, new_path, anime=is_anime)
     except Exception as e:
         # Rollback: move files back
         if old_path.rstrip("/") != new_path.rstrip("/"):
@@ -1095,7 +1096,10 @@ def _move_medusa_to_medusa(result: EvalResult, dest: str):
     try:
         medusa.delete_show(show_slug, remove_files=False)
         time.sleep(5)  # Give Medusa time to fully process the removal
-        medusa.add_show(tvdb_id, new_path)
+        is_anime = show_info.get("config", {}).get("anime", False) or "anime" in dest.lower()
+        src_status = show_info.get("config", {}).get("defaultEpisodeStatus", "Wanted")
+        src_list = (show_info.get("config", {}).get("showLists") or [None])[0]
+        medusa.add_show(tvdb_id, new_path, anime=is_anime, show_list=src_list, default_status=src_status)
     except Exception as e:
         # Rollback: move files back and re-add at old location
         try:
@@ -1104,7 +1108,7 @@ def _move_medusa_to_medusa(result: EvalResult, dest: str):
             pass
         time.sleep(3)
         try:
-            medusa.add_show(tvdb_id, old_path)
+            medusa.add_show(tvdb_id, old_path, anime=is_anime, show_list=src_list, default_status=src_status)
         except Exception:
             pass
         raise e

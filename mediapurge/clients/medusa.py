@@ -76,13 +76,24 @@ def get_root_folders() -> list[str]:
     return sorted(folders)
 
 
-def add_show(tvdb_id: int, location: str):
-    """Add a show to Medusa."""
+def add_show(tvdb_id: int, location: str, anime: bool = False, show_list: str = None, default_status: str = "Wanted"):
+    """Add a show to Medusa with proper configuration."""
     url, headers = _base()
+    config = {
+        "location": location,
+        "defaultEpisodeStatus": default_status,
+        "anime": anime,
+        "seasonFolders": False,
+    }
+    if show_list:
+        config["showLists"] = [show_list]
+    elif anime:
+        config["showLists"] = ["anime"]
+
     r = requests.post(
         f"{url}/api/v2/series",
         headers=headers,
-        json={"id": {"tvdb": tvdb_id}, "config": {"location": location}},
+        json={"id": {"tvdb": tvdb_id}, "config": config},
         verify=False,
     )
     r.raise_for_status()
