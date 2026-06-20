@@ -135,3 +135,11 @@ def unmonitor_series(series_id: int):
     series["monitored"] = False
     r = requests.put(f"{url}/api/v3/series/{series_id}", headers=headers, json=series)
     r.raise_for_status()
+
+
+def rename_series(series_id: int):
+    """Rename all files in a series to match Sonarr's naming convention."""
+    url, headers = _base()
+    r = requests.post(f"{url}/api/v3/command", headers=headers,
+                      json={"name": "RenameSeries", "seriesIds": [series_id]})
+    r.raise_for_status()

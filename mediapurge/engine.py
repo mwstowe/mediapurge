@@ -931,8 +931,10 @@ def _move_medusa_to_sonarr(result: EvalResult, dest: str):
     # Step 3: Remove from Medusa (safe — Sonarr now has it)
     medusa.delete_show(show_slug, remove_files=False)
 
-    # Step 4: Rescan and transfer status
+    # Step 4: Rescan, rename to Sonarr conventions, and transfer status
     sonarr.rescan_series(new_series_id)
+    time.sleep(3)
+    sonarr.rename_series(new_series_id)
     if ignored_eps:
         time.sleep(3)
         sonarr_eps = sonarr.get_episodes(new_series_id)
