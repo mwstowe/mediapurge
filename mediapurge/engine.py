@@ -712,15 +712,28 @@ def _do_move(result: EvalResult, dest: str):
             # Move files if paths differ
             if old_path.rstrip("/") != new_path.rstrip("/"):
                 shutil.move(old_path, new_path)
+            # Get episode status before removing from Sonarr
+            sonarr_eps = sonarr.get_episodes(int(result.manager_id))
+            unmonitored_eps = [(e["seasonNumber"], e["episodeNumber"]) for e in sonarr_eps if not e["monitored"]]
             # Remove from Sonarr (without deleting files)
             sonarr.delete_series(int(result.manager_id), delete_files=False)
             # Add to Medusa and refresh so it detects existing files
             medusa.add_show(tvdb_id, new_path)
-            # Find the new slug and refresh
+            # Find the new slug, refresh, then transfer status
+            new_slug = None
             for s in medusa.get_all_shows():
                 if s.get("id", {}).get("tvdb") == tvdb_id:
-                    medusa.refresh_show(s["id"]["slug"])
+                    new_slug = s["id"]["slug"]
+                    medusa.refresh_show(new_slug)
                     break
+            # Mark unmonitored episodes as Ignored in Medusa
+            if new_slug and unmonitored_eps:
+                import time; time.sleep(3)  # Wait for refresh to complete
+                for season, episode in unmonitored_eps:
+                    try:
+                        medusa.ignore_episode(new_slug, season, episode)
+                    except Exception:
+                        pass
 
     elif result.manager == "medusa":
         # Get show info
@@ -741,6 +754,16 @@ def _do_move(result: EvalResult, dest: str):
             medusa.delete_show(show_slug, remove_files=False)
             medusa.add_show(tvdb_id, new_path)
         elif dest_manager == "sonarr":
+            # Get episode status from Medusa before removing (includes episodes without files)
+            import requests as req
+            from mediapurge.config import get_config as _gc
+            mcfg = _gc()["medusa"]
+            murl = mcfg["url"].rstrip("/")
+            mheaders = {"X-Api-Key": mcfg["api_key"]}
+            ep_r = req.get(f"{murl}/api/v2/series/{show_slug}/episodes?limit=1000", headers=mheaders, verify=False)
+            medusa_eps = ep_r.json() if ep_r.status_code == 200 else []
+            ignored_eps = [(e["season"], e["episode"]) for e in medusa_eps if e.get("status") in ("Ignored", "Skipped")]
+
             # Move files if paths differ
             if old_path.rstrip("/") != new_path.rstrip("/"):
                 shutil.move(old_path, new_path)
@@ -749,6 +772,16 @@ def _do_move(result: EvalResult, dest: str):
             # Add to Sonarr and trigger disk scan to detect existing files
             new_series_id = sonarr.add_series(tvdb_id, show_info.get("title", ""), dest)
             sonarr.rescan_series(new_series_id)
+            # Unmonitor episodes that were Ignored/Skipped in Medusa
+            if ignored_eps:
+                import time; time.sleep(3)  # Wait for rescan
+                sonarr_eps = sonarr.get_episodes(new_series_id)
+                ep_ids_to_unmonitor = [
+                    e["id"] for e in sonarr_eps
+                    if (e["seasonNumber"], e["episodeNumber"]) in ignored_eps
+                ]
+                if ep_ids_to_unmonitor:
+                    sonarr.unmonitor_episodes(ep_ids_to_unmonitor)
 
     elif result.manager == "none":
         # Orphan — just move the files
