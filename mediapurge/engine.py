@@ -449,6 +449,17 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
             if not rules:
                 continue
 
+            # Skip items that already have an active pending action
+            existing_pa = session.execute(
+                select(PendingAction).where(
+                    PendingAction.plex_rating_key == key,
+                    PendingAction.confirmed == False,
+                    PendingAction.cancelled == False,
+                )
+            ).scalar_one_or_none()
+            if existing_pa:
+                continue
+
             manager, manager_id = find_manager(item)
 
             for r in rules:
