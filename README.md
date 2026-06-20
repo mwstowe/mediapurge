@@ -2,69 +2,100 @@
 
 <p align="center"><img src="MediaPurge.png" alt="MediaPurge" width="200"></p>
 
-Automated media lifecycle management for Plex. Manages deletion of watched media across Plex, Sonarr, Radarr, Medusa, and Ombi based on configurable rules.
+Automated media lifecycle management for Plex. Manages deletion and relocation of media across Plex, Sonarr, Radarr, Medusa, and Ombi based on configurable rules.
 
 ## What It Does
 
-- Evaluates rules against your Plex libraries to determine what media should be cleaned up
+- Evaluates rules against your Plex libraries to determine what media should be cleaned up or moved
 - Deletes media through the managing application (Sonarr, Radarr, or Medusa) so downloads don't recur
+- Moves media between libraries and managers (e.g., Medusa → Sonarr, or between Radarr root folders)
 - Cleans up associated Ombi requests when media is deleted
+- Auto-approves Ombi requests for media already in Plex (matched by TVDB/IMDB/TMDB ID)
 - Detects orphaned media (exists in Plex but isn't managed by any app)
-- Optionally confirms with users via email before deleting, with a configurable grace period
+- Confirms with users via email before acting, with configurable grace periods and keep methods
 - Provides a web UI for browsing Plex libraries, managing rules, and running maintenance
+- Reports space recovered after maintenance runs
 
 ## How Rules Work
 
 ### Scopes
 
-Rules are evaluated from most specific to least specific. The first matching rule wins:
+Rules are evaluated from most specific to least specific. The first matching scope wins:
 
 1. **Episode** — applies to a single episode
 2. **Season** — applies to all episodes in a specific season
 3. **Show / Movie** — applies to a specific show or movie
-4. **Library** — applies to everything in a Plex library (e.g., "TV Shows", "Movies")
+4. **Library** — applies to everything in a Plex library
 
-If no rule matches, the default action is **keep** (never delete without an explicit rule).
+Multiple rules can exist at the same scope (e.g., two library rules for "Movies"). Each is evaluated independently — first trigger that fires wins.
 
-### Rule Fields
+If no rule matches, the default action is **keep**.
 
-| Field | Description |
-|-------|-------------|
-| **Action** | `keep` or `delete`. Keep rules exist to override broader delete rules. |
-| **Watched By** | Which user(s) must have watched the media. Can select multiple users or "any." |
-| **Min Days Watched** | Grace period — days after an item is watched before it's eligible for deletion. |
-| **Max Days Age** | Hard age limit — delete after this many days since added, regardless of watch status. |
-| **Max Days Inactive** | Delete entire show if no episodes have been watched in this many days. |
-| **Min Episodes** | Always keep the latest N episodes, even if they qualify for deletion. |
-| **Protect On Deck** | Skip items currently on a user's on-deck list. |
-| **All Watched** | (Shows only) Wait until every episode is watched before taking action on the show as a whole. |
-| **Confirm Before Delete** | Send an email and wait before deleting. User can cancel. Defaults to on. |
-| **Confirm Days** | How long to wait for user response. No response = proceed with deletion. |
-| **Confirm Method** | How the user keeps the media: click a URL, start watching, or mark as unwatched. |
+### Actions
 
-### Episode Processing Order
+| Action | Description |
+|--------|-------------|
+| **Keep** | Protect this media from broader delete/move rules |
+| **Delete** | Remove media when trigger conditions are met |
+| **Move** | Relocate media to a different library/manager when conditions are met |
 
-For show-scoped rules that affect individual episodes:
+### Triggers
 
-- Episodes are processed **oldest first** (S01E01, S01E02, ...)
-- Processing **stops at the first episode that doesn't qualify** — no skipping
-- The latest `min_episodes` are always protected
-- If all episodes qualify AND the show has ended, it collapses to a whole-show deletion
+Each rule has one or more triggers that determine *when* the action fires:
+
+| Trigger Type | Fires when... |
+|-------------|---------------|
+| **After watched** | Specified user(s) have watched the media, and a grace period has passed |
+| **After inactivity** | No one has watched anything in the show/movie for N days |
+| **After age** | N days have passed since the media was added to Plex |
+
+Each trigger independently specifies whether to act immediately or confirm first.
+
+### Episode Handling (shows only, delete action)
+
+| Option | Description |
+|--------|-------------|
+| **Processing mode** | Per episode (delete individual episodes) or per season (delete whole seasons when all episodes qualify) |
+| **Min episodes/seasons** | Always keep the latest N, even if they qualify |
+| **Protect On Deck** | Skip items on a user's on-deck list |
+| **Remove show when empty** | After all episodes are deleted: never / if ended / always remove the show from its manager |
+
+Move rules always operate on the entire show — no per-episode moves.
 
 ### Confirmation Workflow
 
-When `confirm_before_delete` is enabled:
+When a trigger is set to "Confirm first":
 
-1. Media becomes eligible for deletion per the rule
-2. An email is sent to the configured user with instructions
-3. The system waits `confirm_days` for a response
-4. If the user clicks the keep URL / starts watching / marks unwatched → deletion is cancelled and the rule is snoozed for the full timer period
-5. If no response → media is deleted
+1. Media becomes eligible per the trigger condition
+2. An email is sent to the configured user(s) with available keep methods
+3. The system waits N days for a response
+4. **If the user acts** → deletion/move is cancelled, a "kept" confirmation email is sent
+5. **If no response** → action proceeds
 
-### Rule Auto-Cleanup
+Available keep methods (depends on trigger type):
 
-- Rules that delete an entire show or movie are automatically removed after the deletion completes
-- Rules that manage individual episodes persist as long as the show exists
+| Trigger Type | Valid keep methods |
+|-------------|-------------------|
+| After watched | Mark as unwatched, Snooze (reset timer), Disable trigger |
+| After inactivity | Start watching, Snooze, Disable trigger |
+| After age | Snooze, Disable trigger |
+
+Confirmation emails include clickable links and an explicit deletion date.
+
+### Move Feature
+
+Moves relocate media between libraries or managers:
+
+- **Radarr → Radarr**: Uses Radarr's native move API (atomic)
+- **Sonarr → Sonarr**: Uses Sonarr's native move API (atomic)
+- **Sonarr ↔ Medusa**: Moves files, adds to new manager, removes from old manager with rollback on failure
+- **Episode status is preserved**: Ignored/Skipped → Unmonitored (and vice versa)
+
+Safety features:
+- Pre-flight checks (disk space, permissions, destination manager reachability)
+- Source show is unmonitored before file moves to prevent redownloads
+- Rollback if the destination manager rejects the show
+- Same-filesystem moves are instant (rename, not copy)
 
 ## Configuration
 
@@ -104,30 +135,19 @@ ombi:
 
 #### User Tokens
 
-`user_tokens` provides per-user Plex tokens so MediaPurge can check watch status for individual users. Without a token for a user, it falls back to the admin token and sees the admin's watch status — which gives incorrect results.
+`user_tokens` provides per-user Plex tokens so MediaPurge can check watch status for individual users. Without a token for a user, it falls back to the admin token — which gives incorrect results.
 
 The admin/server owner doesn't need an entry — the main `token` is used for them.
 
-To get a shared user's token:
-
-1. Log in to Plex Web as that user (or use their managed account)
-2. Open any media item, then open the XML view by adding `?X-Plex-Token=` to a Plex URL
-3. Or use this command, replacing the username/password:
-   ```bash
-   curl -s 'https://plex.tv/users/sign_in.json' \
-     -X POST \
-     -H 'X-Plex-Client-Identifier: mediapurge' \
-     -d 'user[login]=USERNAME&user[password]=PASSWORD' | python3 -c "import sys,json;print(json.load(sys.stdin)['user']['authToken'])"
-   ```
-4. For managed (home) users without their own Plex account, get the token from your admin account:
-   ```bash
-   python3 -c "
-   from plexapi.server import PlexServer
-   s = PlexServer('http://127.0.0.1:32400', 'YOUR_ADMIN_TOKEN')
-   for u in s.myPlexAccount().users():
-       print(f'{u.username or u.title}: {u.get_token(s.machineIdentifier)}')
-   "
-   ```
+To get a user's token:
+```bash
+python3 -c "
+from plexapi.server import PlexServer
+s = PlexServer('http://127.0.0.1:32400', 'YOUR_ADMIN_TOKEN')
+for u in s.myPlexAccount().users():
+    print(f'{u.username or u.title}: {u.get_token(s.machineIdentifier)}')
+"
+```
 
 ### Web UI
 
@@ -163,8 +183,6 @@ notifications:
     webhook_url: ""
 ```
 
-`admin` receives maintenance reports and test emails. `from` is the sender address.
-
 ### Maintenance
 
 ```yaml
@@ -175,10 +193,6 @@ maintenance:
   excluded_libraries:
     - "3D Movies"
 ```
-
-- `dry_run`: When true, maintenance evaluates but never deletes.
-- `schedule`: Daily run time (24h format). Runs inside the web service.
-- `excluded_libraries`: Libraries to skip entirely during evaluation and orphan scanning.
 
 ## Installation
 
@@ -253,9 +267,9 @@ sudo -u sabnzbd python3.13 -m mediapurge.maintenance
 | Page | Purpose |
 |------|---------|
 | Dashboard | Summary stats, recent actions |
-| Rules | List/create/edit/delete rules |
-| Browse | Navigate Plex libraries with thumbnails, watch status, manager info |
-| Orphans | Media in Plex not managed by any app |
-| Maintenance | Dry-run preview and live execution |
+| Browse | Navigate Plex libraries with thumbnails, watch status, manager info, existing rules |
+| Rules | List/create/edit/delete rules with triggers |
+| Orphans | Async scan for media in Plex not managed by any app |
+| Maintenance | Dry-run preview and live execution with space reporting |
 | Log | Action history |
-| Config | Edit configuration, test connections, test email, change password |
+| Config | Edit configuration, test connections, test email, change password (passwords masked) |
