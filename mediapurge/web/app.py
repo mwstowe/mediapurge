@@ -498,6 +498,7 @@ def create_app() -> Flask:
     @login_required
     def immediate_move(rating_key):
         """Immediately move an item."""
+        import time
         from mediapurge.clients import plex as plex_client
         from mediapurge.engine import find_manager, _do_move, EvalResult
         dest = request.form.get("move_to", "")
@@ -505,6 +506,12 @@ def create_app() -> Flask:
             return redirect(url_for("rules_list"))
         server = plex_client._server()
         item = server.fetchItem(rating_key)
+        # Capture watch status
+        if hasattr(item, "episodes"):
+            watch_status = {(ep.parentIndex, ep.index): ep.isWatched for ep in item.episodes()}
+        else:
+            watch_status = {"item": item.isWatched}
+
         manager, manager_id = find_manager(item)
         result = EvalResult(title=item.title, rating_key=str(rating_key), action="move",
                             manager=manager, manager_id=manager_id, move_to=dest)
@@ -515,6 +522,30 @@ def create_app() -> Flask:
                              action_taken="move", details=f"immediate to {dest}"))
             db.commit(); db.close()
             plex_client.scan_library(item.librarySectionTitle)
+            # Restore watch status
+            time.sleep(10)
+            for _ in range(3):
+                found = None
+                for section in server.library.sections():
+                    try:
+                        for i in section.search(item.title):
+                            if i.title == item.title:
+                                found = i
+                                break
+                    except Exception:
+                        continue
+                    if found:
+                        break
+                if found:
+                    break
+                time.sleep(5)
+            if found:
+                if hasattr(found, "episodes"):
+                    for ep in found.episodes():
+                        if watch_status.get((ep.parentIndex, ep.index)):
+                            ep.markWatched()
+                elif watch_status.get("item"):
+                    found.markWatched()
         except Exception:
             pass
         return redirect(url_for("rules_list"))
