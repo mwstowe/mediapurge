@@ -133,7 +133,8 @@ def create_app() -> Flask:
             db.add(rule)
             db.commit()
             db.close()
-            return redirect(url_for("rules_list"))
+            next_url = request.form.get("next") or url_for("rules_list")
+            return redirect(next_url)
 
         breadcrumb = None
         rating_key = request.args.get("plex_rating_key")
