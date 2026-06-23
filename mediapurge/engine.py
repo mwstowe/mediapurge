@@ -719,6 +719,76 @@ def execute_deletions(report: EngineReport):
         except Exception as e:
             log.warning(f"Failed to trigger Plex scan: {e}")
 
+    # Clean up orphaned rules
+    cleanup_orphaned_rules()
+
+
+def cleanup_orphaned_rules():
+    """Remove rules whose targets no longer exist in Plex or any manager."""
+    session = get_session()
+    rules = session.query(Rule).filter(
+        Rule.scope.in_(["show", "season", "episode"]),
+        Rule.plex_rating_key != None,
+        Rule.enabled == True,
+    ).all()
+
+    server = plex._server()
+    orphaned = []
+
+    for rule in rules:
+        # Check if item exists in Plex
+        try:
+            server.fetchItem(int(rule.plex_rating_key))
+            continue  # Still in Plex, rule is valid
+        except Exception:
+            pass
+
+        # Not in Plex — check if still in any manager
+        found_in_manager = False
+        if rule.media_title:
+            title_lower = rule.media_title.lower()
+            try:
+                for s in sonarr.get_all_series():
+                    if s["title"].lower() == title_lower:
+                        found_in_manager = True
+                        break
+            except Exception:
+                pass
+            if not found_in_manager:
+                try:
+                    for s in medusa.get_all_shows():
+                        if s.get("title", "").lower() == title_lower:
+                            found_in_manager = True
+                            break
+                except Exception:
+                    pass
+            if not found_in_manager:
+                try:
+                    for m in radarr.get_all_movies():
+                        if m["title"].lower() == title_lower:
+                            found_in_manager = True
+                            break
+                except Exception:
+                    pass
+
+        if not found_in_manager:
+            orphaned.append(rule)
+            log.info(f"Orphaned rule detected: #{rule.id} ({rule.media_title}) — target no longer exists")
+            session.add(ActionLog(
+                media_title=rule.media_title or f"rule #{rule.id}",
+                plex_rating_key=rule.plex_rating_key,
+                rule_id=rule.id,
+                action_taken="rule_orphaned",
+                details="rule target no longer in Plex or any manager",
+            ))
+            session.delete(rule)
+
+    if orphaned:
+        session.commit()
+        log.info(f"Cleaned up {len(orphaned)} orphaned rules")
+    session.close()
+    return orphaned
+
 
 def execute_moves(report: EngineReport):
     """Perform moves for items marked 'move' in the report."""
