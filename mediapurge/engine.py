@@ -1158,7 +1158,6 @@ def _path_to_manager(path: str) -> str:
 def _remove_empty_shows(report: EngineReport):
     """Remove shows from their managing app when all episodes have been deleted."""
     session = get_session()
-    # Find show-scoped rules that want removal when empty
     rules = session.query(Rule).filter(
         Rule.scope == "show",
         Rule.remove_show_when_empty != "never",
@@ -1176,21 +1175,24 @@ def _remove_empty_shows(report: EngineReport):
             if eps:
                 continue  # Still has episodes, skip
         except Exception:
-            # Item not found in Plex = already gone
-            pass
+            pass  # Item not found in Plex = already gone, proceed
 
-        # Check if_ended condition
+        # Check if_ended condition using the managing app directly
         if rule.remove_show_when_empty == "if_ended":
-            mgr_info = plex.get_manager_info()
-            paths = plex.get_file_paths(item) if 'item' in dir() else []
+            manager, manager_id = find_manager_by_rule(rule)
             ended = False
-            for p in paths:
-                info = mgr_info.get(p.rstrip("/"))
-                if info and info.get("ended"):
-                    ended = True
-                    break
+            if manager == "sonarr" and manager_id:
+                for s in sonarr.get_all_series():
+                    if s["id"] == int(manager_id):
+                        ended = s.get("ended", s.get("status") == "ended")
+                        break
+            elif manager == "medusa" and manager_id:
+                for s in medusa.get_all_shows():
+                    if s.get("id", {}).get("slug") == str(manager_id):
+                        ended = s.get("status", "").lower() == "ended"
+                        break
             if not ended:
-                continue  # Show hasn't ended, keep in manager
+                continue
 
         # Remove from manager
         manager, manager_id = find_manager_by_rule(rule)
@@ -1201,7 +1203,6 @@ def _remove_empty_shows(report: EngineReport):
             elif manager == "medusa" and manager_id:
                 medusa.delete_show(str(manager_id), remove_files=True)
                 log.info(f"Removed show from Medusa: {rule.media_title}")
-            # Retire the rule
             session.delete(rule)
         except Exception as e:
             log.warning(f"Failed to remove {rule.media_title} from manager: {e}")
