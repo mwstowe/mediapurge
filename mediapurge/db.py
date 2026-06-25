@@ -17,7 +17,8 @@ def get_engine():
     if _engine is None:
         cfg = get_config()
         db_path = cfg.get("database", {}).get("path", "mediapurge.db")
-        _engine = create_engine(f"sqlite:///{db_path}", echo=False)
+        _engine = create_engine(f"sqlite:///{db_path}", echo=False,
+                                connect_args={"timeout": 30})
     return _engine
 
 
