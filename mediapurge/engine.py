@@ -1502,12 +1502,39 @@ def process_pending_actions():
 
         if now >= pa.expires_at.replace(tzinfo=timezone.utc):
             pa.confirmed = True
-            log.info(f"Confirmation expired, marking for deletion: {pa.media_title}")
+            log.info(f"Confirmation expired, executing deletion: {pa.media_title}")
             session.add(ActionLog(
                 media_title=pa.media_title, plex_rating_key=pa.plex_rating_key,
                 rule_id=pa.rule_id, action_taken="confirm_expired_delete",
                 details=json.dumps({"method": pa.confirm_method}),
             ))
+            # Execute the deletion now
+            try:
+                manager, manager_id = "none", None
+                # Find the manager for this item
+                try:
+                    server = plex._server()
+                    item = server.fetchItem(int(pa.plex_rating_key))
+                    manager, manager_id = find_manager(item)
+                except Exception:
+                    pass
+                result = EvalResult(
+                    title=pa.media_title, rating_key=pa.plex_rating_key,
+                    action="delete", manager=manager, manager_id=manager_id,
+                )
+                if manager == "sonarr" and manager_id:
+                    sonarr.delete_series(int(manager_id), delete_files=True)
+                elif manager == "radarr" and manager_id:
+                    radarr.delete_movie(int(manager_id), delete_files=True)
+                elif manager == "medusa" and manager_id:
+                    medusa.delete_show(str(manager_id), remove_files=True)
+                    _delete_direct(result)
+                else:
+                    _delete_direct(result)
+                ombi.cleanup_for_title(pa.media_title)
+                log.info(f"Deleted after confirmation expired: {pa.media_title}")
+            except Exception as e:
+                log.error(f"Failed to delete {pa.media_title} after confirmation: {e}")
 
     session.commit()
     session.close()
