@@ -1551,8 +1551,10 @@ def get_confirmed_deletions() -> list[PendingAction]:
 def _user_cancelled_via_plex(pa: PendingAction) -> bool:
     """Check if user activity in Plex should cancel the pending deletion."""
     methods = pa.confirm_method.split(",") if pa.confirm_method else []
-    # If only snooze/disable methods, no plex-based cancellation
-    if not any(m in methods for m in ("start_watching", "mark_unwatched")):
+
+    # mark_unwatched is handled by URL click only — the engine re-evaluates naturally
+    # start_watching is detected by new watch activity after notification
+    if "start_watching" not in methods:
         return False
 
     try:
@@ -1561,23 +1563,14 @@ def _user_cancelled_via_plex(pa: PendingAction) -> bool:
     except Exception:
         return False
 
-    if "start_watching" in methods:
-        if hasattr(item, "episodes"):
-            for ep in item.episodes():
-                viewed = getattr(ep, "lastViewedAt", None)
-                if viewed and viewed.replace(tzinfo=timezone.utc) > pa.notified_at.replace(tzinfo=timezone.utc):
-                    return True
-        else:
-            viewed = getattr(item, "lastViewedAt", None)
+    if hasattr(item, "episodes"):
+        for ep in item.episodes():
+            viewed = getattr(ep, "lastViewedAt", None)
             if viewed and viewed.replace(tzinfo=timezone.utc) > pa.notified_at.replace(tzinfo=timezone.utc):
                 return True
-
-    if "mark_unwatched" in methods:
-        if hasattr(item, "episodes"):
-            for ep in item.episodes():
-                if not ep.isWatched:
-                    return True
-        elif not item.isWatched:
+    else:
+        viewed = getattr(item, "lastViewedAt", None)
+        if viewed and viewed.replace(tzinfo=timezone.utc) > pa.notified_at.replace(tzinfo=timezone.utc):
             return True
 
     return False
@@ -1604,18 +1597,14 @@ def cancel_pending_by_token(token: str, action: str = "snooze") -> bool:
         if trigger:
             trigger.snoozed_until = datetime.now(timezone.utc) + timedelta(days=trigger.confirm_days)
     elif action == "unwatched":
-        # Mark as unwatched in Plex
+        # Mark as unwatched in Plex — next evaluation will naturally skip unwatched episodes
         try:
             server = plex._server()
             item = server.fetchItem(int(pa.plex_rating_key))
             item.markUnwatched()
         except Exception as e:
             log.warning(f"Could not mark unwatched: {e}")
-        # Also snooze the trigger
-        if pa.trigger_id:
-            trigger = session.get(Trigger, pa.trigger_id)
-            if trigger:
-                trigger.snoozed_until = datetime.now(timezone.utc) + timedelta(days=trigger.confirm_days)
+        # No snooze needed — the unwatched state naturally prevents deletion on next run
 
     actions_desc = {"snooze": "snoozed (timer reset)", "disable": "trigger disabled permanently", "unwatched": "marked as unwatched"}
     _send_kept_notification(pa, actions_desc.get(action, action))
