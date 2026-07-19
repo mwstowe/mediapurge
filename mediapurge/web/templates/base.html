@@ -49,6 +49,13 @@ form input[type="checkbox"], form input[type="radio"] { width: auto; }
 </div>
 {% endif %}
 <div class="container">
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+{% for category, message in messages %}
+<div style="padding:0.75rem;margin-bottom:1rem;border-radius:6px;background:{{ '#922' if category == 'error' else '#0f3460' }};color:#fff;">{{ message }}</div>
+{% endfor %}
+{% endif %}
+{% endwith %}
 {% block content %}{% endblock %}
 </div>
 </body>

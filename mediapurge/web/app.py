@@ -2,7 +2,7 @@ import functools
 import os
 
 import bcrypt
-from flask import Flask, redirect, render_template, request, session, url_for
+from flask import Flask, flash, redirect, render_template, request, session, url_for
 
 from mediapurge.config import get_config, load_config
 from mediapurge.db import get_session, init_db
@@ -486,8 +486,8 @@ def create_app() -> Flask:
                 db.delete(r)
             db.commit()
             db.close()
-        except Exception:
-            pass
+        except Exception as e:
+            flash(f"Operation failed: {e}", "error")
         return redirect(url_for("browse_library", library=library))
 
     @app.route("/browse/<library>/<int:rating_key>/move", methods=["POST"])
@@ -511,8 +511,8 @@ def create_app() -> Flask:
                              action_taken="move", details=f"immediate move to {dest}"))
             db.commit()
             db.close()
-        except Exception:
-            pass
+        except Exception as e:
+            flash(f"Operation failed: {e}", "error")
         return redirect(url_for("browse_library", library=library))
 
     @app.route("/immediate/delete/<int:rating_key>", methods=["POST"])
@@ -562,8 +562,8 @@ def create_app() -> Flask:
                 db.delete(r)
             db.commit(); db.close()
             plex_client.scan_library(item.librarySectionTitle)
-        except Exception:
-            pass
+        except Exception as e:
+            flash(f"Operation failed: {e}", "error")
         return redirect(url_for("rules_list"))
 
     @app.route("/immediate/move/<int:rating_key>", methods=["POST"])
@@ -621,8 +621,8 @@ def create_app() -> Flask:
                             ep.markWatched()
                 elif watch_status.get("item"):
                     found.markWatched()
-        except Exception:
-            pass
+        except Exception as e:
+            flash(f"Operation failed: {e}", "error")
         return redirect(url_for("rules_list"))
 
     @app.route("/plex_thumb")
