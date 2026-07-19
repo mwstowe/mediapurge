@@ -12,7 +12,7 @@
     <td>{{ log.media_title }}</td>
     <td><span class="tag-{{ log.action_taken }}">{{ log.action_taken }}</span></td>
     <td>{{ "Yes" if log.dry_run else "No" }}</td>
-    <td>{{ log.details or "" }}</td>
+    <td style="font-size:0.85rem;color:#aaa;">{{ log.details | format_details }}</td>
   </tr>
   {% endfor %}
 </table>

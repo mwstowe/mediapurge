@@ -30,6 +30,32 @@ def create_app() -> Flask:
             value /= 1024
         return f"{value:.1f} PB"
 
+    @app.template_filter("format_details")
+    def format_details(value):
+        if not value:
+            return ""
+        try:
+            import json
+            data = json.loads(value)
+            parts = []
+            if "reason" in data:
+                parts.append(data["reason"])
+            if "manager" in data:
+                parts.append(f"via {data['manager']}")
+            if "move_to" in data:
+                parts.append(f"→ {data['move_to']}")
+            if "scope" in data:
+                parts.append(f"({data['scope']})")
+            if "method" in data:
+                parts.append(f"method: {data['method']}")
+            if "library" in data:
+                parts.append(f"library: {data['library']}")
+            if parts:
+                return " · ".join(parts)
+            return " · ".join(f"{k}: {v}" for k, v in data.items())
+        except (ValueError, TypeError):
+            return value
+
     def login_required(f):
         @functools.wraps(f)
         def wrapped(*args, **kwargs):
