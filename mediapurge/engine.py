@@ -41,30 +41,47 @@ class EngineReport:
 
 def sync_managed_media():
     """Refresh the managed_media cache from Sonarr, Radarr, and Medusa."""
+    now = datetime.now(timezone.utc)
+    new_entries = []
+
+    # Collect all data first — if any API fails, we keep the old cache
+    try:
+        for s in sonarr.get_all_series():
+            new_entries.append(ManagedMedia(
+                title=s["title"], file_path=s["path"],
+                manager="sonarr", manager_id=s["id"], last_synced=now,
+            ))
+    except Exception as e:
+        log.warning(f"Failed to sync Sonarr: {e}")
+        return  # Abort — keep stale cache rather than partial
+
+    try:
+        for m in radarr.get_all_movies():
+            new_entries.append(ManagedMedia(
+                title=m["title"], file_path=m.get("path", ""),
+                manager="radarr", manager_id=m["id"], last_synced=now,
+            ))
+    except Exception as e:
+        log.warning(f"Failed to sync Radarr: {e}")
+        return
+
+    try:
+        for s in medusa.get_all_shows():
+            path = s.get("config", {}).get("location", s.get("location", ""))
+            slug = s.get("id", {}).get("slug", s.get("slug", ""))
+            new_entries.append(ManagedMedia(
+                title=s.get("title", ""), file_path=path,
+                manager="medusa", manager_id=slug, last_synced=now,
+            ))
+    except Exception as e:
+        log.warning(f"Failed to sync Medusa: {e}")
+        return
+
+    # All data collected successfully — atomic swap
     session = get_session()
     session.query(ManagedMedia).delete()
-    now = datetime.now(timezone.utc)
-
-    for s in sonarr.get_all_series():
-        session.add(ManagedMedia(
-            title=s["title"], file_path=s["path"],
-            manager="sonarr", manager_id=s["id"], last_synced=now,
-        ))
-
-    for m in radarr.get_all_movies():
-        session.add(ManagedMedia(
-            title=m["title"], file_path=m.get("path", ""),
-            manager="radarr", manager_id=m["id"], last_synced=now,
-        ))
-
-    for s in medusa.get_all_shows():
-        path = s.get("config", {}).get("location", s.get("location", ""))
-        slug = s.get("id", {}).get("slug", s.get("slug", ""))
-        session.add(ManagedMedia(
-            title=s.get("title", ""), file_path=path,
-            manager="medusa", manager_id=slug, last_synced=now,
-        ))
-
+    for entry in new_entries:
+        session.add(entry)
     session.commit()
     session.close()
 
