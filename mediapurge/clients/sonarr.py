@@ -1,6 +1,10 @@
+import time
+
 import requests
 
 from mediapurge.config import get_config
+
+_cache = {"series": None, "series_time": 0}
 
 
 def _base() -> tuple[str, dict]:
@@ -9,10 +13,15 @@ def _base() -> tuple[str, dict]:
 
 
 def get_all_series() -> list[dict]:
+    now = time.time()
+    if _cache["series"] is not None and (now - _cache["series_time"]) < 60:
+        return _cache["series"]
     url, headers = _base()
     r = requests.get(f"{url}/api/v3/series", headers=headers)
     r.raise_for_status()
-    return r.json()
+    _cache["series"] = r.json()
+    _cache["series_time"] = now
+    return _cache["series"]
 
 
 def get_episode_files(series_id: int) -> list[dict]:
@@ -44,6 +53,7 @@ def delete_series(series_id: int, delete_files: bool = True):
         params={"deleteFiles": str(delete_files).lower()},
     )
     r.raise_for_status()
+    _cache["series"] = None
 
 
 def unmonitor_season(series_id: int, season_number: int):

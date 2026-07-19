@@ -1,6 +1,10 @@
+import time
+
 import requests
 
 from mediapurge.config import get_config
+
+_cache = {"movies": None, "movies_time": 0}
 
 
 def _base() -> tuple[str, dict]:
@@ -9,10 +13,15 @@ def _base() -> tuple[str, dict]:
 
 
 def get_all_movies() -> list[dict]:
+    now = time.time()
+    if _cache["movies"] is not None and (now - _cache["movies_time"]) < 60:
+        return _cache["movies"]
     url, headers = _base()
     r = requests.get(f"{url}/api/v3/movie", headers=headers)
     r.raise_for_status()
-    return r.json()
+    _cache["movies"] = r.json()
+    _cache["movies_time"] = now
+    return _cache["movies"]
 
 
 def get_movie_by_path(path: str) -> dict | None:
@@ -30,6 +39,7 @@ def delete_movie(movie_id: int, delete_files: bool = True):
         params={"deleteFiles": str(delete_files).lower()},
     )
     r.raise_for_status()
+    _cache["movies"] = None
 
 
 def get_root_folders() -> list[str]:

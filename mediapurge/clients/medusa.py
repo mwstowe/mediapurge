@@ -1,7 +1,10 @@
+import time
+
 import requests
 
 from mediapurge.config import get_config
 
+_cache = {"shows": None, "shows_time": 0}
 
 def _base() -> tuple[str, dict]:
     cfg = get_config()["medusa"]
@@ -13,10 +16,15 @@ def _get(url, headers):
 
 
 def get_all_shows() -> list[dict]:
+    now = time.time()
+    if _cache["shows"] is not None and (now - _cache["shows_time"]) < 60:
+        return _cache["shows"]
     url, headers = _base()
     r = _get(f"{url}/api/v2/series?limit=1000", headers)
     r.raise_for_status()
-    return r.json()
+    _cache["shows"] = r.json()
+    _cache["shows_time"] = now
+    return _cache["shows"]
 
 
 def get_show_by_path(path: str) -> dict | None:
@@ -36,6 +44,7 @@ def delete_show(show_slug: str, remove_files: bool = True):
         verify=False,
     )
     r.raise_for_status()
+    _cache["shows"] = None
 
 
 def ignore_episode(show_slug: str, season: int, episode: int):
