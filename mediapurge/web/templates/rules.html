@@ -8,7 +8,7 @@
   <tr><th>Scope</th><th>Target</th><th>Action</th><th>Conditions</th><th>Confirmation</th><th>Enabled</th><th></th></tr>
   {% for rule in rules %}
   <tr>
-    <td>{{ rule.scope }}</td>
+    <td>{{ rule.display_scope or rule.scope }}</td>
     <td>{{ rule.media_title or rule.plex_library or "—" }}</td>
     <td><span class="tag-{{ rule.action }}">{{ rule.action }}</span></td>
     <td style="font-size:0.85rem;color:#aaa;">

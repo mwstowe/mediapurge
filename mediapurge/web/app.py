@@ -99,6 +99,20 @@ def create_app() -> Flask:
         db = get_session()
         rules = db.execute(select(Rule).order_by(Rule.scope, Rule.plex_library)).scalars().all()
         db.close()
+        # Determine display scope (show vs movie) for show-scoped rules
+        from mediapurge.clients import plex as plex_client
+        server = None
+        for rule in rules:
+            if rule.scope == "show" and rule.plex_rating_key:
+                try:
+                    if server is None:
+                        server = plex_client._server()
+                    item = server.fetchItem(int(rule.plex_rating_key))
+                    rule.display_scope = "movie" if item.type == "movie" else "show"
+                except Exception:
+                    rule.display_scope = "show"
+            else:
+                rule.display_scope = rule.scope
         return render_template("rules.html", rules=rules)
 
     def _parse_triggers_from_form():
