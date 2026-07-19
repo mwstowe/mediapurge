@@ -430,6 +430,7 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
         libraries = [name for name, _ in plex.get_libraries()]
     except Exception as e:
         report.errors.append(f"Failed to connect to Plex: {e}")
+        session.close()
         return report
 
     for lib_name in libraries:
@@ -719,9 +720,6 @@ def execute_deletions(report: EngineReport):
         except Exception as e:
             log.warning(f"Failed to trigger Plex scan: {e}")
 
-    # Clean up orphaned rules
-    cleanup_orphaned_rules()
-
 
 def cleanup_orphaned_rules():
     """Remove rules whose targets no longer exist in Plex or any manager."""
@@ -997,7 +995,7 @@ def _move_sonarr_to_medusa(result: EvalResult, dest: str):
         shutil.move(old_path, new_path)
 
     # Step 2: Add to Medusa at new path
-    is_anime = "anime" in dest_path.lower()
+    is_anime = "anime" in dest.lower()
     try:
         medusa.add_show(tvdb_id, new_path, anime=is_anime)
     except Exception as e:

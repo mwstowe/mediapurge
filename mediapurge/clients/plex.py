@@ -35,9 +35,18 @@ def _timed_lru_cache(seconds=300, maxsize=128):
     return decorator
 
 
+_plex_server = None
+_plex_server_time = 0
+
+
 def _server() -> PlexServer:
-    cfg = get_config()["plex"]
-    return PlexServer(cfg["url"], cfg["token"])
+    global _plex_server, _plex_server_time
+    now = time.time()
+    if _plex_server is None or (now - _plex_server_time) > 600:
+        cfg = get_config()["plex"]
+        _plex_server = PlexServer(cfg["url"], cfg["token"])
+        _plex_server_time = now
+    return _plex_server
 
 
 def get_users() -> list[dict]:

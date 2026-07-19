@@ -67,7 +67,7 @@ def _migrate():
 
     # Rules table migrations
     _add_col("rules", "processing_mode", "VARCHAR", "'episode'")
-    _add_col("rules", "remove_show_when_empty", "BOOLEAN", 0)
+    _add_col("rules", "remove_show_when_empty", "VARCHAR", "'if_ended'")
     _add_col("rules", "snoozed_until", "DATETIME", "NULL")
     _add_col("rules", "move_to", "VARCHAR", "NULL")
 

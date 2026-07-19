@@ -294,9 +294,15 @@ def create_app() -> Flask:
         return render_template("log.html", logs=logs)
 
     # Background task state
+    import threading
+    _maintenance_lock = threading.Lock()
     _task = {"running": False, "report": None, "error": None, "mode": None}
 
     def _run_task(dry_run):
+        if not _maintenance_lock.acquire(blocking=False):
+            _task["error"] = "Maintenance already running"
+            _task["running"] = False
+            return
         try:
             sync_managed_media()
             report = run_evaluation(dry_run=dry_run)
@@ -308,6 +314,8 @@ def create_app() -> Flask:
             _task["report"] = report
         except Exception as e:
             _task["error"] = str(e)
+        finally:
+            _maintenance_lock.release()
         _task["running"] = False
 
     @app.route("/preview")
