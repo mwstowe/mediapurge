@@ -805,6 +805,71 @@ def cleanup_orphaned_rules():
     return orphaned
 
 
+def _has_conflicting_move(result: EvalResult, dest: str) -> bool:
+    """Check if moving an item to dest would trigger a move back to the source."""
+    session = get_session()
+
+    # Parse destination manager:path
+    if ":" in dest and not dest.startswith("/"):
+        _, dest_path = dest.split(":", 1)
+    else:
+        dest_path = dest
+
+    # Find the source path
+    source_path = None
+    try:
+        server = plex._server()
+        item = server.fetchItem(int(result.rating_key))
+        paths = plex.get_file_paths(item)
+        source_path = paths[0].rstrip("/") if paths else None
+    except Exception:
+        pass
+
+    if not source_path:
+        session.close()
+        return False
+
+    # Determine which Plex library the destination belongs to
+    dest_library = None
+    try:
+        for section in plex._server().library.sections():
+            for loc in section.locations:
+                if dest_path.rstrip("/").startswith(loc.rstrip("/")):
+                    dest_library = section.title
+                    break
+            if dest_library:
+                break
+    except Exception:
+        pass
+
+    if not dest_library:
+        session.close()
+        return False
+
+    # Check if there's a library-scoped rule on the destination that moves to the source
+    from mediapurge.models import Trigger
+    rules = session.query(Rule).filter(
+        Rule.scope == "library",
+        Rule.plex_library == dest_library,
+        Rule.action == "manage",
+        Rule.enabled == True,
+    ).all()
+
+    source_parent = "/".join(source_path.split("/")[:-1])
+    for rule in rules:
+        triggers = session.query(Trigger).filter_by(rule_id=rule.id, enabled=True).all()
+        for t in triggers:
+            if t.move_to:
+                # Parse the trigger's move_to destination
+                t_dest = t.move_to.split(":", 1)[-1] if ":" in t.move_to else t.move_to
+                if t_dest.rstrip("/") == source_parent.rstrip("/"):
+                    session.close()
+                    return True
+
+    session.close()
+    return False
+
+
 def execute_moves(report: EngineReport):
     """Perform moves for items marked 'move' in the report."""
     rules_to_retire = set()
@@ -831,6 +896,13 @@ def execute_moves(report: EngineReport):
 
         try:
             dest = result.move_to.rstrip("/")
+
+            # Conflict detection: check if destination has a rule that would move it back
+            if _has_conflicting_move(result, dest):
+                log.warning(f"Move conflict detected for {result.title}: destination has a rule that would move it back. Skipping.")
+                report.errors.append(f"Move conflict: {result.title} would ping-pong between locations")
+                continue
+
             _do_move(result, dest)
             log.info(f"Moved: {result.title} to {dest} via {result.manager}")
             # Retire show-scoped move rules (not library-scoped)
