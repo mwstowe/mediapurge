@@ -676,6 +676,7 @@ def execute_deletions(report: EngineReport):
     """Actually perform deletions for items marked 'delete' in the report."""
     rules_to_delete = set()
     medusa_shows_refreshed = set()
+    medusa_eps_to_ignore = []  # (slug, season, episode)
 
     for result in report.results:
         if result.action != "delete":
@@ -686,6 +687,11 @@ def execute_deletions(report: EngineReport):
                 _delete_episode(result)
                 if result.manager == "medusa" and result.manager_id:
                     medusa_shows_refreshed.add(str(result.manager_id))
+                    # Parse season/episode from title for deferred ignore
+                    import re
+                    match = re.search(r"S(\d+)E(\d+)", result.title)
+                    if match:
+                        medusa_eps_to_ignore.append((str(result.manager_id), int(match.group(1)), int(match.group(2))))
             elif result.manager == "sonarr":
                 sonarr.delete_series(int(result.manager_id), delete_files=True)
                 ombi.cleanup_for_title(result.title)
@@ -716,6 +722,16 @@ def execute_deletions(report: EngineReport):
             medusa.refresh_show(slug)
         except Exception:
             pass
+
+    # Wait for refresh to clear file info, then mark episodes as ignored
+    if medusa_eps_to_ignore:
+        import time
+        time.sleep(8)
+        for slug, season, episode in medusa_eps_to_ignore:
+            try:
+                medusa.ignore_episode(slug, season, episode)
+            except Exception:
+                pass
 
     # Remove shows from manager when all episodes are gone (before retiring rules)
     if any(r.action == "delete" for r in report.results):
@@ -1435,8 +1451,7 @@ def _delete_episode(result: EvalResult):
         log.warning(f"Could not match episode file for {result.title}")
 
     elif result.manager == "medusa":
-        if season is not None and episode is not None:
-            medusa.ignore_episode(str(result.manager_id), season, episode)
+        # Delete the file
         server = plex._server()
         try:
             plex_item = server.fetchItem(int(result.rating_key))
@@ -1447,6 +1462,7 @@ def _delete_episode(result: EvalResult):
                     log.info(f"Removed file: {path}")
         except Exception as e:
             log.warning(f"Could not remove file for {result.title}: {e}")
+        # NOTE: ignore_episode is called AFTER refresh_show in execute_deletions
 
 
 # --- Confirmation workflow ---
