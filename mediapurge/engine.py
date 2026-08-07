@@ -88,7 +88,9 @@ def sync_managed_media():
     # Auto-approve Ombi requests for media that exists in Plex
     try:
         plex_ids = {"tvdb": set(), "imdb": set(), "tmdb": set()}
-        for lib_name, _ in plex.get_libraries():
+        for lib_name, lib_type in plex.get_libraries():
+            if lib_type not in ("show", "movie"):
+                continue
             for item in plex.get_library_items(lib_name):
                 for guid in getattr(item, "guids", []):
                     gid = guid.id
@@ -444,7 +446,7 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
     excluded = cfg.get("maintenance", {}).get("excluded_libraries", [])
 
     try:
-        libraries = [name for name, _ in plex.get_libraries()]
+        libraries = [name for name, ltype in plex.get_libraries() if ltype in ("show", "movie")]
     except Exception as e:
         report.errors.append(f"Failed to connect to Plex: {e}")
         session.close()
@@ -649,7 +651,7 @@ def run_orphan_scan() -> list[EvalResult]:
     orphans = []
 
     try:
-        libraries = [name for name, _ in plex.get_libraries()]
+        libraries = [name for name, ltype in plex.get_libraries() if ltype in ("show", "movie")]
     except Exception:
         return orphans
 

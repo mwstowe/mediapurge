@@ -388,7 +388,7 @@ def create_app() -> Flask:
     def browse():
         """List Plex libraries."""
         from mediapurge.clients import plex as plex_client
-        libraries = plex_client.get_libraries()
+        libraries = [(name, ltype) for name, ltype in plex_client.get_libraries() if ltype in ("show", "movie")]
         db = get_session()
         lib_rules_map = {}
         for r in db.query(Rule).filter(Rule.scope == "library", Rule.enabled == True).all():
