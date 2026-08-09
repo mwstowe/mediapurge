@@ -55,7 +55,7 @@ def _run_maintenance():
     try:
         sync_managed_media()
         report = run_evaluation(dry_run=dry_run)
-        process_pending_actions()
+        expired_deletions = process_pending_actions()
         if not dry_run:
             execute_deletions(report)
             execute_moves(report)
@@ -85,6 +85,11 @@ def _run_maintenance():
         else:
             lines.append("No deletions.")
 
+        if expired_deletions:
+            lines.append(f"\nDeleted after confirmation expired ({len(expired_deletions)}):")
+            for title in expired_deletions:
+                lines.append(f"  • {title}")
+
         if pending:
             lines.append(f"\nNotifications sent ({len(pending)}):")
             for r in pending:
@@ -109,7 +114,7 @@ def _run_maintenance():
         log.info(summary)
 
         # Only send email if there's something to report
-        if deletions or moves or pending or orphaned_rules or report.errors:
+        if deletions or moves or pending or orphaned_rules or expired_deletions or report.errors:
             notify.send("MediaPurge Maintenance", summary)
     except Exception as e:
         log.error(f"Maintenance failed: {e}")

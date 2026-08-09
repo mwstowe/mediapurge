@@ -1577,9 +1577,10 @@ def _send_kept_notification(pa: PendingAction, action_taken: str):
 
 
 def process_pending_actions():
-    """Check pending actions: cancel if user intervened, delete if expired."""
+    """Check pending actions: cancel if user intervened, delete if expired. Returns list of deleted titles."""
     session = get_session()
     now = datetime.now(timezone.utc)
+    expired_deletions = []
 
     pending = session.execute(
         select(PendingAction).where(
@@ -1637,12 +1638,14 @@ def process_pending_actions():
                 else:
                     _delete_direct(result)
                 ombi.cleanup_for_title(pa.media_title)
+                expired_deletions.append(pa.media_title)
                 log.info(f"Deleted after confirmation expired: {pa.media_title}")
             except Exception as e:
                 log.error(f"Failed to delete {pa.media_title} after confirmation: {e}")
 
     session.commit()
     session.close()
+    return expired_deletions
 
 
 def get_confirmed_deletions() -> list[PendingAction]:
