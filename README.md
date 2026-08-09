@@ -97,6 +97,8 @@ Safety features:
 - Rollback if the destination manager rejects the show
 - Same-filesystem moves are instant (rename, not copy)
 
+**Note on watch status after moves:** Plex watch status is preserved across moves, but the "last watched" timestamp resets to the time of the move (Plex API limitation). This means any "after watched" triggers in the destination library's rules will start their countdown from when the move happened, not when the media was originally watched.
+
 ## Configuration
 
 Copy `config.yaml.example` to `config.yaml` and fill in your values.
