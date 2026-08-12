@@ -1402,6 +1402,14 @@ def _remove_empty_shows(report: EngineReport):
                         ended = s.get("status", "").lower() == "ended"
                         break
             if not ended:
+                log.info(f"Show empty but ongoing, keeping in {manager}: {rule.media_title}")
+                session.add(ActionLog(
+                    media_title=rule.media_title or f"rule #{rule.id}",
+                    plex_rating_key=rule.plex_rating_key,
+                    rule_id=rule.id,
+                    action_taken="show_kept_ongoing",
+                    details=f"all episodes removed but show is ongoing in {manager}",
+                ))
                 continue
 
         # Remove from manager
@@ -1409,10 +1417,24 @@ def _remove_empty_shows(report: EngineReport):
         try:
             if manager == "sonarr" and manager_id:
                 sonarr.delete_series(int(manager_id), delete_files=True)
-                log.info(f"Removed show from Sonarr: {rule.media_title}")
+                log.info(f"Removed ended show from Sonarr: {rule.media_title}")
+                session.add(ActionLog(
+                    media_title=rule.media_title or f"rule #{rule.id}",
+                    plex_rating_key=rule.plex_rating_key,
+                    rule_id=rule.id,
+                    action_taken="show_removed_ended",
+                    details=f"show ended, removed from Sonarr",
+                ))
             elif manager == "medusa" and manager_id:
                 medusa.delete_show(str(manager_id), remove_files=True)
-                log.info(f"Removed show from Medusa: {rule.media_title}")
+                log.info(f"Removed ended show from Medusa: {rule.media_title}")
+                session.add(ActionLog(
+                    media_title=rule.media_title or f"rule #{rule.id}",
+                    plex_rating_key=rule.plex_rating_key,
+                    rule_id=rule.id,
+                    action_taken="show_removed_ended",
+                    details=f"show ended, removed from Medusa",
+                ))
             session.delete(rule)
         except Exception as e:
             log.warning(f"Failed to remove {rule.media_title} from manager: {e}")
