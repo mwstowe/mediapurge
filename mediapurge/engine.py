@@ -779,10 +779,18 @@ def cleanup_orphaned_rules():
         # Not in Plex — check if still in any manager
         found_in_manager = False
         if rule.media_title:
+            import re
+            # Strip year suffix for matching: "Show (2024)" -> "show"
             title_lower = rule.media_title.lower()
+            title_base = re.sub(r"\s*\(\d{4}\)\s*$", "", title_lower).strip()
+
+            def _title_matches(manager_title):
+                mt = manager_title.lower()
+                return mt == title_lower or mt == title_base or title_base in mt or mt in title_base
+
             try:
                 for s in sonarr.get_all_series():
-                    if s["title"].lower() == title_lower:
+                    if _title_matches(s["title"]):
                         found_in_manager = True
                         break
             except Exception:
@@ -790,7 +798,7 @@ def cleanup_orphaned_rules():
             if not found_in_manager:
                 try:
                     for s in medusa.get_all_shows():
-                        if s.get("title", "").lower() == title_lower:
+                        if _title_matches(s.get("title", "")):
                             found_in_manager = True
                             break
                 except Exception:
@@ -798,7 +806,7 @@ def cleanup_orphaned_rules():
             if not found_in_manager:
                 try:
                     for m in radarr.get_all_movies():
-                        if m["title"].lower() == title_lower:
+                        if _title_matches(m["title"]):
                             found_in_manager = True
                             break
                 except Exception:
