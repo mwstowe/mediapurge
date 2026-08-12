@@ -170,6 +170,19 @@ def create_app() -> Flask:
                 enabled="enabled" in request.form,
             )
             rule.triggers = _parse_triggers_from_form()
+            # Capture TVDB/TMDB IDs from Plex for durable identification
+            if rule.plex_rating_key:
+                try:
+                    from mediapurge.clients import plex as plex_client
+                    server = plex_client._server()
+                    item = server.fetchItem(int(rule.plex_rating_key))
+                    for guid in getattr(item, "guids", []):
+                        if guid.id.startswith("tvdb://"):
+                            rule.tvdb_id = int(guid.id[7:])
+                        elif guid.id.startswith("tmdb://"):
+                            rule.tmdb_id = int(guid.id[7:])
+                except Exception:
+                    pass
             db.add(rule)
             db.commit()
             db.close()

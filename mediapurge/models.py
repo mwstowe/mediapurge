@@ -18,6 +18,8 @@ class Rule(Base):
     plex_library: Mapped[str | None] = mapped_column(String, nullable=True)
     plex_rating_key: Mapped[str | None] = mapped_column(String, nullable=True)
     media_title: Mapped[str | None] = mapped_column(String, nullable=True)
+    tvdb_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tmdb_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     action: Mapped[str] = mapped_column(String, default='manage')  # keep/manage
     watched_by: Mapped[str] = mapped_column(String, default='any')
     protect_on_deck: Mapped[bool] = mapped_column(Boolean, default=True)

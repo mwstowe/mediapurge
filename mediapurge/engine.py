@@ -788,29 +788,56 @@ def cleanup_orphaned_rules():
                 mt = manager_title.lower()
                 return mt == title_lower or mt == title_base or title_base in mt or mt in title_base
 
-            try:
-                for s in sonarr.get_all_series():
-                    if _title_matches(s["title"]):
-                        found_in_manager = True
-                        break
-            except Exception:
-                pass
-            if not found_in_manager:
+            # Prefer ID-based matching when available
+            if rule.tvdb_id or rule.tmdb_id:
                 try:
-                    for s in medusa.get_all_shows():
-                        if _title_matches(s.get("title", "")):
+                    for s in sonarr.get_all_series():
+                        if rule.tvdb_id and s.get("tvdbId") == rule.tvdb_id:
                             found_in_manager = True
                             break
                 except Exception:
                     pass
-            if not found_in_manager:
+                if not found_in_manager:
+                    try:
+                        for s in medusa.get_all_shows():
+                            if rule.tvdb_id and s.get("id", {}).get("tvdb") == rule.tvdb_id:
+                                found_in_manager = True
+                                break
+                    except Exception:
+                        pass
+                if not found_in_manager:
+                    try:
+                        for m in radarr.get_all_movies():
+                            if rule.tmdb_id and m.get("tmdbId") == rule.tmdb_id:
+                                found_in_manager = True
+                                break
+                    except Exception:
+                        pass
+            else:
+                # Fallback to title matching
                 try:
-                    for m in radarr.get_all_movies():
-                        if _title_matches(m["title"]):
+                    for s in sonarr.get_all_series():
+                        if _title_matches(s["title"]):
                             found_in_manager = True
                             break
                 except Exception:
                     pass
+                if not found_in_manager:
+                    try:
+                        for s in medusa.get_all_shows():
+                            if _title_matches(s.get("title", "")):
+                                found_in_manager = True
+                                break
+                    except Exception:
+                        pass
+                if not found_in_manager:
+                    try:
+                        for m in radarr.get_all_movies():
+                            if _title_matches(m["title"]):
+                                found_in_manager = True
+                                break
+                    except Exception:
+                        pass
 
         if not found_in_manager:
             orphaned.append(rule)
