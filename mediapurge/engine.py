@@ -1377,10 +1377,12 @@ def _remove_empty_shows(report: EngineReport):
     for rule in rules:
         if not rule.plex_rating_key:
             continue
-        # Check if the show still has episodes in Plex
+        # Check if the show still has episodes in Plex (or if movie still exists)
         try:
             server = plex._server()
             item = server.fetchItem(int(rule.plex_rating_key))
+            if item.type == "movie":
+                continue  # Movie still exists in Plex, not empty
             eps = item.episodes() if hasattr(item, "episodes") else []
             if eps:
                 continue  # Still has episodes, skip
