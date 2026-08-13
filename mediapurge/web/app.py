@@ -98,7 +98,8 @@ def create_app() -> Flask:
     @login_required
     def rules_list():
         db = get_session()
-        rules = db.execute(select(Rule).order_by(Rule.scope, Rule.plex_library)).scalars().all()
+        from sqlalchemy.orm import joinedload
+        rules = db.execute(select(Rule).options(joinedload(Rule.triggers)).order_by(Rule.scope, Rule.plex_library)).unique().scalars().all()
         db.close()
         # Determine display scope (show vs movie) for show-scoped rules
         from mediapurge.clients import plex as plex_client

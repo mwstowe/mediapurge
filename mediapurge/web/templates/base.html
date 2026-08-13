@@ -31,6 +31,25 @@ form input[type="checkbox"], form input[type="radio"] { width: auto; }
 .error { color: #f44; }
 .tag-keep { color: #4caf50; } .tag-delete { color: #f44; } .tag-orphan { color: #ff9800; }
 </style>
+<script>
+document.addEventListener('click', function(e) {
+  var th = e.target.closest('th.sortable');
+  if (!th) return;
+  var table = th.closest('table');
+  var idx = Array.from(th.parentNode.children).indexOf(th);
+  var tbody = table.querySelector('tbody') || table;
+  var rows = Array.from(tbody.querySelectorAll('tr')).filter(r => r.querySelector('td'));
+  var asc = th.dataset.sort !== 'asc';
+  rows.sort(function(a, b) {
+    var av = (a.children[idx] || {}).textContent || '';
+    var bv = (b.children[idx] || {}).textContent || '';
+    return asc ? av.localeCompare(bv) : bv.localeCompare(av);
+  });
+  th.dataset.sort = asc ? 'asc' : 'desc';
+  rows.forEach(r => tbody.appendChild(r));
+});
+</script>
+<style>th.sortable { cursor:pointer; } th.sortable:hover { color:#4fc3f7; }</style>
 </head>
 <body>
 {% if session.get('authed') %}

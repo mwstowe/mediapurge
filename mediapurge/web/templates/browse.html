@@ -34,7 +34,7 @@
   | <a href="{{ url_for('rules_new') }}?scope=library&plex_library={{ library }}" class="btn btn-sm btn-primary">+ Library Rule</a>
 </p>
 <table>
-  <tr><th></th><th>Title</th><th>Year</th><th>Managed By</th><th>Status</th><th>Last Activity</th><th>Rule</th></tr>
+  <tr><th></th><th class="sortable">Title</th><th class="sortable">Year</th><th class="sortable">Managed By</th><th class="sortable">Status</th><th class="sortable">Last Activity</th><th>Rule</th></tr>
   {% for item in items %}
   <tr>
     <td><img src="{{ url_for('plex_thumb', path=item.thumb) }}" style="height:40px;border-radius:4px;" alt="" loading="lazy"></td>

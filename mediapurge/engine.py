@@ -20,6 +20,22 @@ log = logging.getLogger(__name__)
 # Shared lock for maintenance operations (used by web UI and scheduler)
 maintenance_lock = threading.Lock()
 
+_managed_media_cache = None
+
+
+def _get_managed_media_cache():
+    global _managed_media_cache
+    if _managed_media_cache is None:
+        session = get_session()
+        _managed_media_cache = session.execute(select(ManagedMedia)).scalars().all()
+        session.close()
+    return _managed_media_cache
+
+
+def _invalidate_managed_cache():
+    global _managed_media_cache
+    _managed_media_cache = None
+
 
 @dataclass
 class EvalResult:
@@ -88,6 +104,7 @@ def sync_managed_media():
         session.add(entry)
     session.commit()
     session.close()
+    _invalidate_managed_cache()
 
     # Auto-approve Ombi requests for media that exists in Plex
     try:
@@ -192,9 +209,7 @@ def find_manager(item) -> tuple[str, int | None]:
     if not paths:
         return "none", None
 
-    session = get_session()
-    managed = session.execute(select(ManagedMedia)).scalars().all()
-    session.close()
+    managed = _get_managed_media_cache()
 
     matches = []
     for m in managed:
@@ -1108,6 +1123,10 @@ def _do_move(result: EvalResult, dest: str):
     dest_path = dest_path.rstrip("/")
 
     # --- Pre-flight checks ---
+    # Validate dest_path is a real absolute path without traversal
+    dest_path = os.path.realpath(dest_path)
+    if not dest_path.startswith("/pub/video"):
+        raise ValueError(f"Destination path outside allowed root: {dest_path}")
     if not os.path.isdir(dest_path):
         raise FileNotFoundError(f"Destination directory does not exist: {dest_path}")
     if not os.access(dest_path, os.W_OK):
