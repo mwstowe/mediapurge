@@ -270,8 +270,23 @@ sudo -u sabnzbd python3.13 -m mediapurge.maintenance
 |------|---------|
 | Dashboard | Summary stats, recent actions |
 | Browse | Navigate Plex libraries with thumbnails, watch status, manager info, existing rules |
+| Wanted | Items monitored in managers but not yet in Plex — create pending rules for upcoming media |
 | Rules | List/create/edit/delete rules with triggers |
 | Orphans | Async scan for media in Plex not managed by any app |
 | Maintenance | Dry-run preview and live execution with space reporting |
 | Log | Action history |
 | Config | Edit configuration, test connections, test email, change password (passwords masked) |
+
+### Immediate Actions
+
+From the Browse page, clicking "+" on an item opens the rule form with **Delete Now** and **Move Now** buttons. These execute immediately without creating a rule — useful for one-off cleanup.
+
+### Pending Rules
+
+Rules can be created for media that hasn't arrived in Plex yet (e.g., a movie requested in Ombi but not yet available). These "pending rules" store a TVDB/IMDB/TMDB ID and automatically activate when the media appears in Plex during a maintenance run.
+
+### Automatic Cleanup
+
+- **Rule auto-retirement**: Show-scoped rules are automatically deleted after their target is fully removed
+- **Orphaned rule detection**: Rules whose targets no longer exist in Plex or any manager are cleaned up during maintenance
+- **Ombi sync**: Requests for media already in Plex are auto-approved (by TVDB/IMDB/TMDB ID match)
