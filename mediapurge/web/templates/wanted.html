@@ -25,7 +25,11 @@
       <td>{{ item.status }}</td>
       <td><code>{{ item.external_id }}</code></td>
       <td>
-        <a href="{{ url_for('rules_new', scope='show', media_title=item.title, external_id=item.external_id, external_source=item.external_source, type=item.type) }}" class="btn btn-primary btn-sm">+ Rule</a>
+        {% if item.rule_id %}
+          <a href="{{ url_for('rules_edit', rule_id=item.rule_id) }}" class="btn btn-primary btn-sm">✎ Edit Rule</a>
+        {% else %}
+          <a href="{{ url_for('rules_new', scope='show', media_title=item.title, external_id=item.external_id, external_source=item.external_source, type=item.type) }}" class="btn btn-primary btn-sm">+ Rule</a>
+        {% endif %}
       </td>
     </tr>
     {% endfor %}

@@ -543,6 +543,9 @@ def create_app() -> Flask:
         existing_external_ids = {r.external_id for r in all_rules if r.external_id}
         existing_titles = {r.media_title.lower() for r in all_rules if r.media_title}
         existing_plex_keys = {r.plex_rating_key for r in all_rules if r.plex_rating_key}
+        # Build lookup: external_id or title -> rule_id
+        rule_by_ext = {r.external_id: r.id for r in all_rules if r.external_id}
+        rule_by_title = {r.media_title.lower(): r.id for r in all_rules if r.media_title}
         db.close()
 
         # Get items in Plex for exclusion
@@ -576,7 +579,8 @@ def create_app() -> Flask:
                 elif imdb_id:
                     ext_id = f"imdb:{imdb_id}"
                     ext_source = "imdb"
-                if ext_id and ext_id not in existing_external_ids and ext_id not in plex_guids and m.get("title", "").lower() not in existing_titles:
+                if ext_id and ext_id not in plex_guids:
+                    rule_id = rule_by_ext.get(ext_id) or rule_by_title.get(m.get("title", "").lower())
                     wanted_items.append({
                         "title": m.get("title", "Unknown"),
                         "year": m.get("year", ""),
@@ -585,6 +589,7 @@ def create_app() -> Flask:
                         "external_id": ext_id,
                         "external_source": ext_source,
                         "type": "movie",
+                        "rule_id": rule_id,
                     })
         except Exception:
             pass
@@ -594,7 +599,8 @@ def create_app() -> Flask:
             for s in sonarr.get_wanted_series():
                 tvdb_id = s.get("tvdbId")
                 ext_id = f"tvdb:{tvdb_id}" if tvdb_id else None
-                if ext_id and ext_id not in existing_external_ids and ext_id not in plex_guids and s.get("title", "").lower() not in existing_titles:
+                if ext_id and ext_id not in plex_guids:
+                    rule_id = rule_by_ext.get(ext_id) or rule_by_title.get(s.get("title", "").lower())
                     wanted_items.append({
                         "title": s.get("title", "Unknown"),
                         "year": s.get("year", ""),
@@ -603,6 +609,7 @@ def create_app() -> Flask:
                         "external_id": ext_id,
                         "external_source": "tvdb",
                         "type": "show",
+                        "rule_id": rule_id,
                     })
         except Exception:
             pass
@@ -612,7 +619,8 @@ def create_app() -> Flask:
             for s in medusa.get_wanted_shows():
                 tvdb_id = s.get("id", {}).get("tvdb")
                 ext_id = f"tvdb:{tvdb_id}" if tvdb_id else None
-                if ext_id and ext_id not in existing_external_ids and ext_id not in plex_guids and s.get("title", "").lower() not in existing_titles:
+                if ext_id and ext_id not in plex_guids:
+                    rule_id = rule_by_ext.get(ext_id) or rule_by_title.get(s.get("title", "").lower())
                     wanted_items.append({
                         "title": s.get("title", "Unknown"),
                         "year": s.get("year", ""),
@@ -621,6 +629,7 @@ def create_app() -> Flask:
                         "external_id": ext_id,
                         "external_source": "tvdb",
                         "type": "show",
+                        "rule_id": rule_id,
                     })
         except Exception:
             pass
