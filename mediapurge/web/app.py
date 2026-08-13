@@ -543,9 +543,11 @@ def create_app() -> Flask:
         existing_external_ids = {r.external_id for r in all_rules if r.external_id}
         existing_titles = {r.media_title.lower() for r in all_rules if r.media_title}
         existing_plex_keys = {r.plex_rating_key for r in all_rules if r.plex_rating_key}
-        # Build lookup: external_id or title -> rule_id
+        # Build lookup: external_id or title -> rule_id and plex_rating_key
         rule_by_ext = {r.external_id: r.id for r in all_rules if r.external_id}
         rule_by_title = {r.media_title.lower(): r.id for r in all_rules if r.media_title}
+        plex_key_by_ext = {r.external_id: r.plex_rating_key for r in all_rules if r.external_id and r.plex_rating_key}
+        plex_key_by_title = {r.media_title.lower(): r.plex_rating_key for r in all_rules if r.media_title and r.plex_rating_key}
         db.close()
 
         # Get items in Plex for exclusion
@@ -590,6 +592,7 @@ def create_app() -> Flask:
                         "external_source": ext_source,
                         "type": "movie",
                         "rule_id": rule_id,
+                        "plex_key": plex_key_by_ext.get(ext_id) or plex_key_by_title.get(m.get("title", "").lower()),
                     })
         except Exception:
             pass
@@ -610,6 +613,7 @@ def create_app() -> Flask:
                         "external_source": "tvdb",
                         "type": "show",
                         "rule_id": rule_id,
+                        "plex_key": plex_key_by_ext.get(ext_id) or plex_key_by_title.get(s.get("title", "").lower()),
                     })
         except Exception:
             pass
@@ -630,6 +634,7 @@ def create_app() -> Flask:
                         "external_source": "tvdb",
                         "type": "show",
                         "rule_id": rule_id,
+                        "plex_key": plex_key_by_ext.get(ext_id) or plex_key_by_title.get(s.get("title", "").lower()),
                     })
         except Exception:
             pass

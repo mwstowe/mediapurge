@@ -23,7 +23,7 @@
       <td>{{ item.year }}</td>
       <td>{{ item.manager }}</td>
       <td>{{ item.status }}</td>
-      <td><code>{{ item.external_id }}</code></td>
+      <td>{% if item.plex_key %}<code>plex:{{ item.plex_key }}</code>{% else %}<code>{{ item.external_id }}</code>{% endif %}</td>
       <td>
         {% if item.rule_id %}
           <a href="{{ url_for('rules_edit', rule_id=item.rule_id) }}" class="btn btn-primary btn-sm">✎ Edit Rule</a>
