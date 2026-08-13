@@ -33,8 +33,25 @@
 </div>
 {% endif %}
 <h1>{{ "Edit" if rule else "New" }} Rule</h1>
+{% if request.args.get('external_id') or (rule and rule.external_id and not rule.plex_rating_key) %}
+<div style="padding:0.75rem;margin-bottom:1rem;border-radius:6px;background:#0f3460;color:#fff;">
+  ⏳ <strong>Pending Rule</strong> — This rule will activate automatically when the media appears in Plex.
+  {% if request.args.get('external_id') %}
+    <br><span style="color:#aaa;">External ID: <code>{{ request.args.get('external_id') }}</code></span>
+  {% elif rule and rule.external_id %}
+    <br><span style="color:#aaa;">External ID: <code>{{ rule.external_id }}</code></span>
+  {% endif %}
+</div>
+{% endif %}
 <form method="post">
 <input type="hidden" name="next" value="{{ request.referrer or '' }}">
+{% if request.args.get('external_id') %}
+<input type="hidden" name="external_id" value="{{ request.args.get('external_id') }}">
+<input type="hidden" name="external_source" value="{{ request.args.get('external_source', '') }}">
+{% elif rule and rule.external_id %}
+<input type="hidden" name="external_id" value="{{ rule.external_id }}">
+<input type="hidden" name="external_source" value="{{ rule.external_source or '' }}">
+{% endif %}
 
 <!-- APPLIES TO -->
 <fieldset style="border:1px solid #333;padding:1rem;border-radius:6px;margin-bottom:1rem;">

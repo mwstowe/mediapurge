@@ -73,6 +73,10 @@ def _migrate():
     _add_col("rules", "tvdb_id", "INTEGER", "NULL")
     _add_col("rules", "tmdb_id", "INTEGER", "NULL")
 
+    # Pending rules columns
+    _add_col("rules", "external_id", "VARCHAR", "NULL")
+    _add_col("rules", "external_source", "VARCHAR", "NULL")
+
     # PendingAction migrations
     _add_col("pending_actions", "trigger_id", "INTEGER", "NULL")
     _add_col("pending_actions", "notified_to", "VARCHAR", "NULL")

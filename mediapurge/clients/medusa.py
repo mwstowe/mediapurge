@@ -125,3 +125,8 @@ def add_show(tvdb_id: int, location: str, anime: bool = False, show_list: str = 
     # Step 5: Unpause and set the real defaultEpisodeStatus for future episodes
     requests.patch(f"{url}/api/v2/series/{slug}", headers=headers,
                    json={"config": {"defaultEpisodeStatus": default_status, "paused": False}}, verify=False)
+
+
+def get_wanted_shows() -> list[dict]:
+    """Get shows with wanted episodes."""
+    return get_all_shows()

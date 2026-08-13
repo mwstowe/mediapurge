@@ -163,3 +163,8 @@ def manual_import(series_id: int, files: list[dict]):
     r = requests.post(f"{url}/api/v3/command", headers=headers,
                       json={"name": "ManualImport", "importMode": "auto", "files": files})
     r.raise_for_status()
+
+
+def get_wanted_series() -> list[dict]:
+    """Get monitored series without all episodes."""
+    return [s for s in get_all_series() if s.get('monitored')]

@@ -129,6 +129,59 @@ def _is_show_ended(show) -> bool:
     return False
 
 
+def activate_pending_rules() -> list[Rule]:
+    """Activate pending rules whose media has appeared in Plex.
+
+    A pending rule has plex_rating_key=NULL and external_id set.
+    Searches all Plex library items for matching external IDs and activates matches.
+    """
+    session = get_session()
+    pending = session.execute(
+        select(Rule).where(
+            Rule.plex_rating_key.is_(None),
+            Rule.external_id.isnot(None),
+            Rule.enabled == True,
+        )
+    ).scalars().all()
+
+    if not pending:
+        session.close()
+        return []
+
+    # Build lookup dict: {source_prefix://id -> ratingKey}
+    guid_to_key: dict[str, str] = {}
+    try:
+        for lib_name, lib_type in plex.get_libraries():
+            if lib_type not in ("show", "movie"):
+                continue
+            for item in plex.get_library_items(lib_name):
+                for guid in getattr(item, "guids", []):
+                    guid_to_key[guid.id] = str(item.ratingKey)
+    except Exception as e:
+        log.warning(f"Failed to build Plex GUID lookup for pending rules: {e}")
+        session.close()
+        return []
+
+    activated = []
+    for rule in pending:
+        # external_id stores the full value like "tvdb:123" — convert to guid format "tvdb://123"
+        ext_id = rule.external_id
+        if ext_id and ":" in ext_id:
+            source, value = ext_id.split(":", 1)
+            guid_key = f"{source}://{value}"
+            rating_key = guid_to_key.get(guid_key)
+            if rating_key:
+                rule.plex_rating_key = rating_key
+                activated.append(rule)
+                log.info(f"Activated pending rule '{rule.media_title}' (id={rule.id}): "
+                         f"{ext_id} → ratingKey {rating_key}")
+
+    if activated:
+        session.commit()
+    session.close()
+    return activated
+
+
 def find_manager(item) -> tuple[str, int | None]:
     """Determine which application manages a Plex item."""
     paths = plex.get_file_paths(item)

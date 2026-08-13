@@ -45,7 +45,7 @@ def _run_maintenance():
     from mediapurge.engine import (
         execute_deletions, process_pending_actions, run_evaluation, sync_managed_media,
     )
-    from mediapurge.engine import execute_moves, cleanup_orphaned_rules
+    from mediapurge.engine import execute_moves, cleanup_orphaned_rules, activate_pending_rules
     from mediapurge import notify
 
     cfg = get_config()
@@ -54,6 +54,7 @@ def _run_maintenance():
     log.info(f"Scheduled maintenance starting (dry_run={dry_run})")
     try:
         sync_managed_media()
+        activated = activate_pending_rules()
         report = run_evaluation(dry_run=dry_run)
         expired_deletions = process_pending_actions()
         if not dry_run:
@@ -105,6 +106,11 @@ def _run_maintenance():
             for r in orphaned_rules:
                 lines.append(f"  • {r.media_title}")
 
+        if activated:
+            lines.append(f"\nPending rules activated ({len(activated)}):")
+            for r in activated:
+                lines.append(f"  • {r.media_title} ({r.external_id})")
+
         if report.errors:
             lines.append(f"\nErrors ({len(report.errors)}):")
             for e in report.errors:
@@ -114,7 +120,7 @@ def _run_maintenance():
         log.info(summary)
 
         # Only send email if there's something to report
-        if deletions or moves or pending or orphaned_rules or expired_deletions or report.errors:
+        if deletions or moves or pending or orphaned_rules or expired_deletions or activated or report.errors:
             notify.send("MediaPurge Maintenance", summary)
     except Exception as e:
         log.error(f"Maintenance failed: {e}")

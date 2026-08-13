@@ -61,3 +61,8 @@ def move_movie(movie_id: int, new_root_folder: str):
     movie["rootFolderPath"] = new_root_folder
     r = requests.put(f"{url}/api/v3/movie/{movie_id}?moveFiles=true", headers=headers, json=movie)
     r.raise_for_status()
+
+
+def get_wanted_movies() -> list[dict]:
+    """Get monitored movies without files."""
+    return [m for m in get_all_movies() if not m.get('hasFile') and m.get('monitored')]

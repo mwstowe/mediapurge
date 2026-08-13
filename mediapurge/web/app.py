@@ -168,6 +168,8 @@ def create_app() -> Flask:
                 min_episodes=int(request.form.get("min_episodes", 0)),
                 remove_show_when_empty=request.form.get("remove_show_when_empty", "never"),
                 enabled="enabled" in request.form,
+                external_id=request.form.get("external_id") or None,
+                external_source=request.form.get("external_source") or None,
             )
             rule.triggers = _parse_triggers_from_form()
             # Capture TVDB/TMDB IDs from Plex for durable identification
@@ -234,6 +236,8 @@ def create_app() -> Flask:
             rule.min_episodes = int(request.form.get("min_episodes", 0))
             rule.remove_show_when_empty = request.form.get("remove_show_when_empty", "never")
             rule.enabled = "enabled" in request.form
+            rule.external_id = request.form.get("external_id") or rule.external_id
+            rule.external_source = request.form.get("external_source") or rule.external_source
             # Replace triggers
             rule.triggers.clear()
             rule.triggers = _parse_triggers_from_form()
@@ -527,6 +531,101 @@ def create_app() -> Flask:
         except Exception as e:
             flash(f"Operation failed: {e}", "error")
         return redirect(url_for("browse_library", library=library))
+
+    @app.route("/browse/wanted")
+    @login_required
+    def browse_wanted():
+        """Show wanted items from Radarr, Sonarr, and Medusa that don't have rules yet."""
+        from mediapurge.clients import plex as plex_client
+        db = get_session()
+        # Get existing pending rules to exclude items that already have rules
+        existing_rules = db.execute(
+            select(Rule).where(Rule.external_id.isnot(None))
+        ).scalars().all()
+        existing_external_ids = {r.external_id for r in existing_rules}
+        db.close()
+
+        # Get items in Plex for exclusion
+        plex_guids = set()
+        try:
+            for lib_name, lib_type in plex_client.get_libraries():
+                if lib_type not in ("show", "movie"):
+                    continue
+                for item in plex_client.get_library_items(lib_name):
+                    for guid in getattr(item, "guids", []):
+                        # Normalize to our format: "tvdb:123"
+                        gid = guid.id
+                        if "://" in gid:
+                            source, value = gid.split("://", 1)
+                            plex_guids.add(f"{source}:{value}")
+        except Exception:
+            pass
+
+        wanted_items = []
+
+        # Radarr: monitored movies without files
+        try:
+            for m in radarr.get_wanted_movies():
+                tmdb_id = m.get("tmdbId")
+                imdb_id = m.get("imdbId")
+                ext_id = None
+                ext_source = None
+                if tmdb_id:
+                    ext_id = f"tmdb:{tmdb_id}"
+                    ext_source = "tmdb"
+                elif imdb_id:
+                    ext_id = f"imdb:{imdb_id}"
+                    ext_source = "imdb"
+                if ext_id and ext_id not in existing_external_ids and ext_id not in plex_guids:
+                    wanted_items.append({
+                        "title": m.get("title", "Unknown"),
+                        "year": m.get("year", ""),
+                        "manager": "Radarr",
+                        "status": "Wanted",
+                        "external_id": ext_id,
+                        "external_source": ext_source,
+                        "type": "movie",
+                    })
+        except Exception:
+            pass
+
+        # Sonarr: monitored series not in Plex
+        try:
+            for s in sonarr.get_wanted_series():
+                tvdb_id = s.get("tvdbId")
+                ext_id = f"tvdb:{tvdb_id}" if tvdb_id else None
+                if ext_id and ext_id not in existing_external_ids and ext_id not in plex_guids:
+                    wanted_items.append({
+                        "title": s.get("title", "Unknown"),
+                        "year": s.get("year", ""),
+                        "manager": "Sonarr",
+                        "status": "Monitored",
+                        "external_id": ext_id,
+                        "external_source": "tvdb",
+                        "type": "show",
+                    })
+        except Exception:
+            pass
+
+        # Medusa: shows with wanted episodes not in Plex
+        try:
+            for s in medusa.get_wanted_shows():
+                tvdb_id = s.get("id", {}).get("tvdb")
+                ext_id = f"tvdb:{tvdb_id}" if tvdb_id else None
+                if ext_id and ext_id not in existing_external_ids and ext_id not in plex_guids:
+                    wanted_items.append({
+                        "title": s.get("title", "Unknown"),
+                        "year": s.get("year", ""),
+                        "manager": "Medusa",
+                        "status": "Wanted",
+                        "external_id": ext_id,
+                        "external_source": "tvdb",
+                        "type": "show",
+                    })
+        except Exception:
+            pass
+
+        return render_template("wanted.html", items=wanted_items)
 
     @app.route("/immediate/delete/<int:rating_key>", methods=["POST"])
     @login_required

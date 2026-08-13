@@ -26,6 +26,8 @@ class Rule(Base):
     processing_mode: Mapped[str] = mapped_column(String, default='episode')  # episode/season
     min_episodes: Mapped[int] = mapped_column(Integer, default=0)
     remove_show_when_empty: Mapped[str] = mapped_column(String, default="if_ended")  # never/always/if_ended
+    external_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    external_source: Mapped[str | None] = mapped_column(String, nullable=True)
     snoozed_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
