@@ -137,15 +137,25 @@ def get_library_items(library_name: str):
     return _server().library.section(library_name).all()
 
 
+_user_servers = {}  # token -> PlexServer
+
+
+def _user_server(token):
+    """Get or create a cached PlexServer instance for a user token."""
+    if token not in _user_servers:
+        cfg = get_config()["plex"]
+        _user_servers[token] = PlexServer(cfg["url"], token)
+    return _user_servers[token]
+
+
 def is_watched_by(item, usernames: list[str]) -> tuple[bool, datetime | None]:
     """Check if item is watched by any of the given users. Returns (watched, last_viewed_at)."""
     cfg = get_config()["plex"]
-    server_url = cfg["url"]
     user_tokens = cfg.get("user_tokens", {})
 
     for username in usernames:
         token = user_tokens.get(username, cfg["token"])
-        user_server = PlexServer(server_url, token)
+        user_server = _user_server(token)
         try:
             user_item = user_server.fetchItem(item.ratingKey)
             if user_item.isWatched:

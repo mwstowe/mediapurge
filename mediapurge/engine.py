@@ -3,6 +3,7 @@
 import json
 import logging
 import secrets
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
@@ -15,6 +16,9 @@ from mediapurge.models import ActionLog, ManagedMedia, PendingAction, Rule, Trig
 from mediapurge import notify
 
 log = logging.getLogger(__name__)
+
+# Shared lock for maintenance operations (used by web UI and scheduler)
+maintenance_lock = threading.Lock()
 
 
 @dataclass
@@ -499,174 +503,177 @@ def run_evaluation(dry_run: bool = True) -> EngineReport:
     excluded = cfg.get("maintenance", {}).get("excluded_libraries", [])
 
     try:
-        libraries = [name for name, ltype in plex.get_libraries() if ltype in ("show", "movie")]
-    except Exception as e:
-        report.errors.append(f"Failed to connect to Plex: {e}")
-        session.close()
-        return report
-
-    for lib_name in libraries:
-        if lib_name in excluded:
-            continue
         try:
-            items = plex.get_library_items(lib_name)
+            libraries = [name for name, ltype in plex.get_libraries() if ltype in ("show", "movie")]
         except Exception as e:
-            report.errors.append(f"Failed to list library '{lib_name}': {e}")
-            continue
+            report.errors.append(f"Failed to connect to Plex: {e}")
+            return report
 
-        for item in items:
-            key = str(item.ratingKey)
-            title = item.title
-
-            rules = resolve_rules(item, lib_name)
-            if not rules:
+        for lib_name in libraries:
+            if lib_name in excluded:
+                continue
+            try:
+                items = plex.get_library_items(lib_name)
+            except Exception as e:
+                report.errors.append(f"Failed to list library '{lib_name}': {e}")
                 continue
 
-            # If item already has an active pending action, show status but don't re-evaluate
-            existing_pa = session.execute(
-                select(PendingAction).where(
-                    PendingAction.plex_rating_key == key,
-                    PendingAction.confirmed == False,
-                    PendingAction.cancelled == False,
-                )
-            ).scalar_one_or_none()
-            if existing_pa:
-                expires = existing_pa.expires_at.strftime("%Y-%m-%d") if existing_pa.expires_at else "?"
-                report.results.append(EvalResult(
-                    title=title, rating_key=key, action="awaiting_response",
-                    reason=f"notified {existing_pa.notified_at.strftime('%m-%d') if existing_pa.notified_at else '?'}, expires {expires}",
-                    notified_at=existing_pa.notified_at.strftime("%Y-%m-%d %H:%M") if existing_pa.notified_at else None,
-                ))
-                continue
+            for item in items:
+                key = str(item.ratingKey)
+                title = item.title
 
-            manager, manager_id = find_manager(item)
-
-            for r in rules:
-                # Show-scoped rules evaluate per-episode (or show-level for move triggers)
-                if r.scope in ("show", "library") and hasattr(item, "episodes"):
-                    # Move triggers always operate at show level
-                    move_trigger = next((t for t in r.triggers if t.action == "move" and t.enabled), None)
-                    if move_trigger:
-                        action, reason, trigger = evaluate_item(item, r)
-                        if action == "move":
-                            report.results.append(EvalResult(
-                                title=title, rating_key=key, action="move",
-                                rule_id=r.id, trigger_id=trigger.id if trigger else None,
-                                reason=reason, manager=manager, manager_id=manager_id,
-                                move_to=trigger.move_to if trigger else None,
-                            ))
-                            session.add(ActionLog(
-                                media_title=title, plex_rating_key=key, rule_id=r.id,
-                                action_taken="move", dry_run=dry_run,
-                                details=json.dumps({"reason": reason, "move_to": trigger.move_to if trigger else None}),
-                            ))
-                            break
-
-                    triggered = False
-                    pending_eps = []
-                    for ep, action, reason, trigger in evaluate_show_episodes(item, r):
-                        if action == "delete_show":
-                            report.results.append(EvalResult(
-                                title=title, rating_key=key, action="delete",
-                                rule_id=r.id, trigger_id=trigger.id if trigger else None,
-                                reason=reason, manager=manager, manager_id=manager_id,
-                            ))
-                            session.add(ActionLog(
-                                media_title=title, plex_rating_key=key,
-                                rule_id=r.id, action_taken="delete", dry_run=dry_run,
-                                details=json.dumps({"reason": reason, "manager": manager, "scope": "whole_show"}),
-                            ))
-                            triggered = True
-                            pending_eps = []
-                            break
-                        elif action == "move":
-                            report.results.append(EvalResult(
-                                title=title, rating_key=key, action="move",
-                                rule_id=r.id, trigger_id=trigger.id if trigger else None,
-                                reason=reason, manager=manager, manager_id=manager_id,
-                                move_to=trigger.move_to if trigger else None,
-                            ))
-                            session.add(ActionLog(
-                                media_title=title, plex_rating_key=key, rule_id=r.id,
-                                action_taken="move", dry_run=dry_run,
-                                details=json.dumps({"reason": reason, "move_to": trigger.move_to if trigger else None}),
-                            ))
-                            triggered = True
-                            pending_eps = []
-                            break
-                        elif action == "pending_confirm" and getattr(ep, "type", "") != "episode":
-                            _handle_pending_confirm(session, r, trigger, key, title, dry_run)
-                            report.results.append(EvalResult(
-                                title=title, rating_key=key, action="pending_confirm",
-                                rule_id=r.id, trigger_id=trigger.id if trigger else None,
-                                reason=reason, manager=manager, manager_id=manager_id,
-                            ))
-                            triggered = True
-                            pending_eps = []
-                            break
-                        elif action == "delete":
-                            ep_title = f"{title} - S{ep.parentIndex:02d}E{ep.index:02d}"
-                            report.results.append(EvalResult(
-                                title=ep_title, rating_key=str(ep.ratingKey), action="delete",
-                                rule_id=r.id, trigger_id=trigger.id if trigger else None,
-                                reason=reason, manager=manager, manager_id=manager_id,
-                            ))
-                            session.add(ActionLog(
-                                media_title=ep_title, plex_rating_key=str(ep.ratingKey),
-                                rule_id=r.id, action_taken="delete", dry_run=dry_run,
-                                details=json.dumps({"reason": reason, "manager": manager}),
-                            ))
-                            triggered = True
-                        elif action == "pending_confirm":
-                            pending_eps.append((ep, trigger))
-                            triggered = True
-
-                    if pending_eps:
-                        ep_labels = [f"S{ep.parentIndex:02d}E{ep.index:02d}" for ep, _ in pending_eps[:5]]
-                        ep_list = ", ".join(ep_labels)
-                        if len(pending_eps) > 5:
-                            ep_list += f" +{len(pending_eps) - 5} more"
-                        t = pending_eps[0][1]
-                        reason = f"{len(pending_eps)} eps ({ep_list}) · confirms in {t.confirm_days}d"
-                        _handle_pending_confirm(session, r, t, key, title, dry_run)
-                        report.results.append(EvalResult(
-                            title=title, rating_key=key, action="pending_confirm",
-                            rule_id=r.id, trigger_id=t.id if t else None,
-                            reason=reason, manager=manager, manager_id=manager_id,
-                        ))
-
-                    if triggered:
-                        break
+                rules = resolve_rules(item, lib_name)
+                if not rules:
                     continue
 
-                # Single-item evaluation (movie or episode-scoped)
-                action, reason, trigger = evaluate_item(item, r)
-                if action != "keep":
-                    result = EvalResult(
-                        title=title, rating_key=key, action=action,
-                        rule_id=r.id, trigger_id=trigger.id if trigger else None,
-                        reason=reason, manager=manager, manager_id=manager_id,
-                        move_to=trigger.move_to if trigger and action == "move" else None,
+                # If item already has an active pending action, show status but don't re-evaluate
+                existing_pa = session.execute(
+                    select(PendingAction).where(
+                        PendingAction.plex_rating_key == key,
+                        PendingAction.confirmed == False,
+                        PendingAction.cancelled == False,
                     )
-                    report.results.append(result)
-                    if action == "delete":
-                        session.add(ActionLog(
-                            media_title=title, plex_rating_key=key, rule_id=r.id,
-                            action_taken="delete", dry_run=dry_run,
-                            details=json.dumps({"reason": reason, "manager": manager}),
-                        ))
-                    elif action == "move":
-                        session.add(ActionLog(
-                            media_title=title, plex_rating_key=key, rule_id=r.id,
-                            action_taken="move", dry_run=dry_run,
-                            details=json.dumps({"reason": reason, "manager": manager, "move_to": trigger.move_to if trigger else None}),
-                        ))
-                    elif action == "pending_confirm":
-                        _handle_pending_confirm(session, r, trigger, key, title, dry_run)
-                    break
+                ).scalar_one_or_none()
+                if existing_pa:
+                    expires = existing_pa.expires_at.strftime("%Y-%m-%d") if existing_pa.expires_at else "?"
+                    report.results.append(EvalResult(
+                        title=title, rating_key=key, action="awaiting_response",
+                        reason=f"notified {existing_pa.notified_at.strftime('%m-%d') if existing_pa.notified_at else '?'}, expires {expires}",
+                        notified_at=existing_pa.notified_at.strftime("%Y-%m-%d %H:%M") if existing_pa.notified_at else None,
+                    ))
+                    continue
 
-    session.commit()
-    session.close()
+                manager, manager_id = find_manager(item)
+
+                for r in rules:
+                    # Show-scoped rules evaluate per-episode (or show-level for move triggers)
+                    if r.scope in ("show", "library") and hasattr(item, "episodes"):
+                        # Move triggers always operate at show level
+                        move_trigger = next((t for t in r.triggers if t.action == "move" and t.enabled), None)
+                        if move_trigger:
+                            action, reason, trigger = evaluate_item(item, r)
+                            if action == "move":
+                                report.results.append(EvalResult(
+                                    title=title, rating_key=key, action="move",
+                                    rule_id=r.id, trigger_id=trigger.id if trigger else None,
+                                    reason=reason, manager=manager, manager_id=manager_id,
+                                    move_to=trigger.move_to if trigger else None,
+                                ))
+                                session.add(ActionLog(
+                                    media_title=title, plex_rating_key=key, rule_id=r.id,
+                                    action_taken="move", dry_run=dry_run,
+                                    details=json.dumps({"reason": reason, "move_to": trigger.move_to if trigger else None}),
+                                ))
+                                break
+
+                        triggered = False
+                        pending_eps = []
+                        for ep, action, reason, trigger in evaluate_show_episodes(item, r):
+                            if action == "delete_show":
+                                report.results.append(EvalResult(
+                                    title=title, rating_key=key, action="delete",
+                                    rule_id=r.id, trigger_id=trigger.id if trigger else None,
+                                    reason=reason, manager=manager, manager_id=manager_id,
+                                ))
+                                session.add(ActionLog(
+                                    media_title=title, plex_rating_key=key,
+                                    rule_id=r.id, action_taken="delete", dry_run=dry_run,
+                                    details=json.dumps({"reason": reason, "manager": manager, "scope": "whole_show"}),
+                                ))
+                                triggered = True
+                                pending_eps = []
+                                break
+                            elif action == "move":
+                                report.results.append(EvalResult(
+                                    title=title, rating_key=key, action="move",
+                                    rule_id=r.id, trigger_id=trigger.id if trigger else None,
+                                    reason=reason, manager=manager, manager_id=manager_id,
+                                    move_to=trigger.move_to if trigger else None,
+                                ))
+                                session.add(ActionLog(
+                                    media_title=title, plex_rating_key=key, rule_id=r.id,
+                                    action_taken="move", dry_run=dry_run,
+                                    details=json.dumps({"reason": reason, "move_to": trigger.move_to if trigger else None}),
+                                ))
+                                triggered = True
+                                pending_eps = []
+                                break
+                            elif action == "pending_confirm" and getattr(ep, "type", "") != "episode":
+                                _handle_pending_confirm(session, r, trigger, key, title, dry_run)
+                                report.results.append(EvalResult(
+                                    title=title, rating_key=key, action="pending_confirm",
+                                    rule_id=r.id, trigger_id=trigger.id if trigger else None,
+                                    reason=reason, manager=manager, manager_id=manager_id,
+                                ))
+                                triggered = True
+                                pending_eps = []
+                                break
+                            elif action == "delete":
+                                ep_title = f"{title} - S{ep.parentIndex:02d}E{ep.index:02d}"
+                                report.results.append(EvalResult(
+                                    title=ep_title, rating_key=str(ep.ratingKey), action="delete",
+                                    rule_id=r.id, trigger_id=trigger.id if trigger else None,
+                                    reason=reason, manager=manager, manager_id=manager_id,
+                                ))
+                                session.add(ActionLog(
+                                    media_title=ep_title, plex_rating_key=str(ep.ratingKey),
+                                    rule_id=r.id, action_taken="delete", dry_run=dry_run,
+                                    details=json.dumps({"reason": reason, "manager": manager}),
+                                ))
+                                triggered = True
+                            elif action == "pending_confirm":
+                                pending_eps.append((ep, trigger))
+                                triggered = True
+
+                        if pending_eps:
+                            ep_labels = [f"S{ep.parentIndex:02d}E{ep.index:02d}" for ep, _ in pending_eps[:5]]
+                            ep_list = ", ".join(ep_labels)
+                            if len(pending_eps) > 5:
+                                ep_list += f" +{len(pending_eps) - 5} more"
+                            t = pending_eps[0][1]
+                            reason = f"{len(pending_eps)} eps ({ep_list}) · confirms in {t.confirm_days}d"
+                            _handle_pending_confirm(session, r, t, key, title, dry_run)
+                            report.results.append(EvalResult(
+                                title=title, rating_key=key, action="pending_confirm",
+                                rule_id=r.id, trigger_id=t.id if t else None,
+                                reason=reason, manager=manager, manager_id=manager_id,
+                            ))
+
+                        if triggered:
+                            break
+                        continue
+
+                    # Single-item evaluation (movie or episode-scoped)
+                    action, reason, trigger = evaluate_item(item, r)
+                    if action != "keep":
+                        result = EvalResult(
+                            title=title, rating_key=key, action=action,
+                            rule_id=r.id, trigger_id=trigger.id if trigger else None,
+                            reason=reason, manager=manager, manager_id=manager_id,
+                            move_to=trigger.move_to if trigger and action == "move" else None,
+                        )
+                        report.results.append(result)
+                        if action == "delete":
+                            session.add(ActionLog(
+                                media_title=title, plex_rating_key=key, rule_id=r.id,
+                                action_taken="delete", dry_run=dry_run,
+                                details=json.dumps({"reason": reason, "manager": manager}),
+                            ))
+                        elif action == "move":
+                            session.add(ActionLog(
+                                media_title=title, plex_rating_key=key, rule_id=r.id,
+                                action_taken="move", dry_run=dry_run,
+                                details=json.dumps({"reason": reason, "manager": manager, "move_to": trigger.move_to if trigger else None}),
+                            ))
+                        elif action == "pending_confirm":
+                            _handle_pending_confirm(session, r, trigger, key, title, dry_run)
+                        break
+
+        session.commit()
+    except Exception as e:
+        report.errors.append(str(e))
+    finally:
+        session.close()
 
     # Enrich pending_confirm results with notification status
     pa_session = get_session()
@@ -795,6 +802,7 @@ def execute_deletions(report: EngineReport):
         for rule_id in rules_to_delete:
             rule = session.get(Rule, rule_id)
             if rule:
+                session.query(PendingAction).filter_by(rule_id=rule.id, confirmed=False, cancelled=False).update({"cancelled": True})
                 log.info(f"Retiring rule #{rule.id} ({rule.media_title}) — media deleted")
                 session.delete(rule)
         session.commit()
@@ -902,6 +910,7 @@ def cleanup_orphaned_rules():
                 action_taken="rule_orphaned",
                 details="rule target no longer in Plex or any manager",
             ))
+            session.query(PendingAction).filter_by(rule_id=rule.id, confirmed=False, cancelled=False).update({"cancelled": True})
             session.delete(rule)
 
     if orphaned:
@@ -1028,6 +1037,7 @@ def execute_moves(report: EngineReport):
         for rule_id in rules_to_retire:
             rule = s.get(Rule, rule_id)
             if rule:
+                s.query(PendingAction).filter_by(rule_id=rule.id, confirmed=False, cancelled=False).update({"cancelled": True})
                 log.info(f"Retiring move rule #{rule.id} ({rule.media_title}) — move completed")
                 s.delete(rule)
         s.commit()
@@ -1490,6 +1500,7 @@ def _remove_empty_shows(report: EngineReport):
                     action_taken="show_removed_ended",
                     details=f"show ended, removed from Medusa",
                 ))
+            session.query(PendingAction).filter_by(rule_id=rule.id, confirmed=False, cancelled=False).update({"cancelled": True})
             session.delete(rule)
         except Exception as e:
             log.warning(f"Failed to remove {rule.media_title} from manager: {e}")

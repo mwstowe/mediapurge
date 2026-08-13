@@ -44,15 +44,19 @@ def _run_maintenance():
     from mediapurge.config import get_config
     from mediapurge.engine import (
         execute_deletions, process_pending_actions, run_evaluation, sync_managed_media,
+        maintenance_lock,
     )
     from mediapurge.engine import execute_moves, cleanup_orphaned_rules, activate_pending_rules
     from mediapurge import notify
 
-    cfg = get_config()
-    dry_run = cfg.get("maintenance", {}).get("dry_run", True)
-
-    log.info(f"Scheduled maintenance starting (dry_run={dry_run})")
+    if not maintenance_lock.acquire(blocking=False):
+        log.warning("Scheduled maintenance skipped — another maintenance run is in progress")
+        return
     try:
+        cfg = get_config()
+        dry_run = cfg.get("maintenance", {}).get("dry_run", True)
+
+        log.info(f"Scheduled maintenance starting (dry_run={dry_run})")
         sync_managed_media()
         activated = activate_pending_rules()
         report = run_evaluation(dry_run=dry_run)
@@ -124,3 +128,5 @@ def _run_maintenance():
             notify.send("MediaPurge Maintenance", summary)
     except Exception as e:
         log.error(f"Maintenance failed: {e}")
+    finally:
+        maintenance_lock.release()

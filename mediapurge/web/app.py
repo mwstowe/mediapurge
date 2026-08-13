@@ -85,7 +85,8 @@ def create_app() -> Flask:
     def dashboard():
         db = get_session()
         rule_count = db.query(Rule).count()
-        orphan_count = len(_orphan_task["results"]) if _orphan_task["results"] else 0
+        with _orphan_lock:
+            orphan_count = len(_orphan_task["results"]) if _orphan_task["results"] else 0
         recent = db.execute(
             select(ActionLog).order_by(desc(ActionLog.timestamp)).limit(20)
         ).scalars().all()
@@ -278,40 +279,51 @@ def create_app() -> Flask:
         db = get_session()
         rule = db.get(Rule, rule_id)
         if rule:
+            from mediapurge.models import PendingAction
+            db.query(PendingAction).filter_by(rule_id=rule.id, confirmed=False, cancelled=False).update({"cancelled": True})
             db.delete(rule)
             db.commit()
         db.close()
         return redirect(url_for("rules_list"))
 
     _orphan_task = {"running": False, "results": None}
+    import threading
+    from mediapurge.engine import maintenance_lock
+    _orphan_lock = threading.Lock()
 
     @app.route("/orphans")
     @login_required
     def orphans():
-        if _orphan_task["running"]:
-            return render_template("orphans.html", orphans=None, running=True)
+        with _orphan_lock:
+            if _orphan_task["running"]:
+                return render_template("orphans.html", orphans=None, running=True)
         if request.args.get("scan"):
-            _orphan_task["running"] = True
-            _orphan_task["results"] = None
-            import threading
+            with _orphan_lock:
+                _orphan_task["running"] = True
+                _orphan_task["results"] = None
             def _scan():
                 from mediapurge.engine import run_orphan_scan
                 try:
                     sync_managed_media()
-                    _orphan_task["results"] = run_orphan_scan()
+                    results = run_orphan_scan()
                 except Exception:
-                    _orphan_task["results"] = []
-                _orphan_task["running"] = False
+                    results = []
+                with _orphan_lock:
+                    _orphan_task["results"] = results
+                    _orphan_task["running"] = False
             threading.Thread(target=_scan, daemon=True).start()
             return render_template("orphans.html", orphans=None, running=True)
-        return render_template("orphans.html", orphans=_orphan_task["results"], running=False)
+        with _orphan_lock:
+            results = _orphan_task["results"]
+        return render_template("orphans.html", orphans=results, running=False)
 
     @app.route("/orphans/status")
     @login_required
     def orphans_status():
         import json as jsonlib
-        if _orphan_task["running"]:
-            return jsonlib.dumps({"running": True})
+        with _orphan_lock:
+            if _orphan_task["running"]:
+                return jsonlib.dumps({"running": True})
         return jsonlib.dumps({"running": False, "done": True})
 
     @app.route("/log")
@@ -325,14 +337,14 @@ def create_app() -> Flask:
         return render_template("log.html", logs=logs)
 
     # Background task state
-    import threading
-    _maintenance_lock = threading.Lock()
+    _task_lock = threading.Lock()
     _task = {"running": False, "report": None, "error": None, "mode": None}
 
     def _run_task(dry_run):
-        if not _maintenance_lock.acquire(blocking=False):
-            _task["error"] = "Maintenance already running"
-            _task["running"] = False
+        if not maintenance_lock.acquire(blocking=False):
+            with _task_lock:
+                _task["error"] = "Maintenance already running"
+                _task["running"] = False
             return
         try:
             sync_managed_media()
@@ -342,29 +354,33 @@ def create_app() -> Flask:
                 process_pending_actions()
                 execute_deletions(report)
                 execute_moves(report)
-            _task["report"] = report
+            with _task_lock:
+                _task["report"] = report
         except Exception as e:
-            _task["error"] = str(e)
+            with _task_lock:
+                _task["error"] = str(e)
         finally:
-            _maintenance_lock.release()
-        _task["running"] = False
+            maintenance_lock.release()
+        with _task_lock:
+            _task["running"] = False
 
     @app.route("/preview")
     @login_required
     def preview():
         mode = request.args.get("mode")
-        if _task["running"]:
-            return render_template("preview.html", report=None, error=None, ran=False, running=True)
-        if _task["report"] is not None and mode is None:
-            report = _task["report"]
-            ran = _task["mode"] == "run"
-            return render_template("preview.html", report=report, error=_task["error"], ran=ran, running=False)
+        with _task_lock:
+            if _task["running"]:
+                return render_template("preview.html", report=None, error=None, ran=False, running=True)
+            if _task["report"] is not None and mode is None:
+                report = _task["report"]
+                ran = _task["mode"] == "run"
+                return render_template("preview.html", report=report, error=_task["error"], ran=ran, running=False)
         if mode in ("preview", "run"):
-            _task["running"] = True
-            _task["report"] = None
-            _task["error"] = None
-            _task["mode"] = mode
-            import threading
+            with _task_lock:
+                _task["running"] = True
+                _task["report"] = None
+                _task["error"] = None
+                _task["mode"] = mode
             dry_run = mode == "preview"
             threading.Thread(target=_run_task, args=(dry_run,), daemon=True).start()
             return render_template("preview.html", report=None, error=None, ran=False, running=True)
@@ -374,30 +390,32 @@ def create_app() -> Flask:
     @login_required
     def preview_status():
         import json as jsonlib
-        if _task["running"]:
-            return jsonlib.dumps({"running": True})
-        if _task["error"]:
-            return jsonlib.dumps({"running": False, "error": _task["error"]})
+        with _task_lock:
+            if _task["running"]:
+                return jsonlib.dumps({"running": True})
+            if _task["error"]:
+                return jsonlib.dumps({"running": False, "error": _task["error"]})
         return jsonlib.dumps({"running": False, "done": True})
 
     @app.route("/preview/results")
     @login_required
     def preview_results():
-        report = _task["report"]
-        error = _task["error"]
-        ran = _task["mode"] == "run"
+        with _task_lock:
+            report = _task["report"]
+            error = _task["error"]
+            ran = _task["mode"] == "run"
         return render_template("preview.html", report=report, error=error, ran=ran, running=False)
 
     @app.route("/run", methods=["POST"])
     @login_required
     def run_now():
-        if not _task["running"]:
-            _task["running"] = True
-            _task["report"] = None
-            _task["error"] = None
-            _task["mode"] = "run"
-            import threading
-            threading.Thread(target=_run_task, args=(False,), daemon=True).start()
+        with _task_lock:
+            if not _task["running"]:
+                _task["running"] = True
+                _task["report"] = None
+                _task["error"] = None
+                _task["mode"] = "run"
+                threading.Thread(target=_run_task, args=(False,), daemon=True).start()
         return render_template("preview.html", report=None, error=None, ran=False, running=True)
 
     @app.route("/browse")
@@ -758,7 +776,7 @@ def create_app() -> Flask:
         """Proxy Plex thumbnails."""
         import requests as req
         thumb_path = request.args.get("path", "")
-        if not thumb_path:
+        if not thumb_path or not thumb_path.startswith("/") or "?" in thumb_path or ".." in thumb_path:
             return "", 404
         cfg_plex = get_config()["plex"]
         url = f"{cfg_plex['url']}{thumb_path}?X-Plex-Token={cfg_plex['token']}"

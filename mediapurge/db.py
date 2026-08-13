@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from mediapurge.config import get_config
@@ -19,6 +19,13 @@ def get_engine():
         db_path = cfg.get("database", {}).get("path", "mediapurge.db")
         _engine = create_engine(f"sqlite:///{db_path}", echo=False,
                                 connect_args={"timeout": 30})
+
+        @event.listens_for(_engine, "connect")
+        def set_sqlite_pragma(dbapi_conn, connection_record):
+            cursor = dbapi_conn.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.close()
+
     return _engine
 
 

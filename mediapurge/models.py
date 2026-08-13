@@ -57,7 +57,7 @@ class PendingAction(Base):
     __tablename__ = "pending_actions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    rule_id: Mapped[int] = mapped_column(Integer, ForeignKey("rules.id"))
+    rule_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("rules.id", ondelete="SET NULL"), nullable=True)
     trigger_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("triggers.id"), nullable=True)
     plex_rating_key: Mapped[str] = mapped_column(String)
     media_title: Mapped[str] = mapped_column(String)
