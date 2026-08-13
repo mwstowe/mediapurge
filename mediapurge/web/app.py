@@ -723,7 +723,8 @@ def create_app() -> Flask:
             return redirect(url_for("rules_list"))
         server = plex_client._server()
         item = server.fetchItem(rating_key)
-        # Capture watch status
+        # Capture watch status and match guid
+        saved_guid = item.guid
         if hasattr(item, "episodes"):
             watch_status = {(ep.parentIndex, ep.index): ep.isWatched for ep in item.episodes()}
         else:
@@ -760,6 +761,18 @@ def create_app() -> Flask:
                     break
                 time.sleep(5)
             if found:
+                # Fix match if Plex re-matched incorrectly
+                if saved_guid and found.guid != saved_guid:
+                    try:
+                        matches = found.matches(title=item.title)
+                        for m in matches:
+                            if m.guid == saved_guid:
+                                found.fixMatch(searchResult=m)
+                                time.sleep(3)
+                                found.reload()
+                                break
+                    except Exception:
+                        pass
                 if hasattr(found, "episodes"):
                     for ep in found.episodes():
                         if watch_status.get((ep.parentIndex, ep.index)):

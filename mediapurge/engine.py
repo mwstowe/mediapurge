@@ -1005,12 +1005,14 @@ def execute_moves(report: EngineReport):
     rules_to_retire = set()
     # Capture watch status before moves
     watch_status = {}  # rating_key -> {ep_key: watched}
+    match_guids = {}  # rating_key -> guid (for fixMatch after move)
     for result in report.results:
         if result.action != "move" or not result.move_to:
             continue
         try:
             server = plex._server()
             item = server.fetchItem(int(result.rating_key))
+            match_guids[result.rating_key] = item.guid
             if hasattr(item, "episodes"):
                 watch_status[result.rating_key] = {
                     (ep.parentIndex, ep.index): ep.isWatched for ep in item.episodes()
@@ -1093,6 +1095,22 @@ def execute_moves(report: EngineReport):
                 if not found:
                     log.warning(f"Could not find {result.title} in Plex after move")
                     continue
+
+                # Fix match if Plex re-matched incorrectly
+                saved_guid = match_guids.get(result.rating_key)
+                if saved_guid and found.guid != saved_guid:
+                    try:
+                        matches = found.matches(title=result.title)
+                        for m in matches:
+                            if m.guid == saved_guid:
+                                found.fixMatch(searchResult=m)
+                                log.info(f"Fixed Plex match for {result.title}")
+                                time.sleep(3)  # Wait for metadata refresh
+                                found.reload()
+                                break
+                    except Exception as e:
+                        log.warning(f"Could not fix match for {result.title}: {e}")
+
                 if hasattr(found, "episodes"):
                     for ep in found.episodes():
                         key = (ep.parentIndex, ep.index)
