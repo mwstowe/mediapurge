@@ -646,7 +646,7 @@ def create_app() -> Flask:
                     rule_id = rule_by_ext.get(ext_id) or rule_by_title.get(s.get("title", "").lower())
                     wanted_items.append({
                         "title": s.get("title", "Unknown"),
-                        "year": s.get("year", ""),
+                        "year": s.get("year", {}).get("start", "") if isinstance(s.get("year"), dict) else s.get("year", ""),
                         "manager": "Medusa",
                         "status": "Wanted",
                         "external_id": ext_id,

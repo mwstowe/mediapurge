@@ -20,7 +20,7 @@
     {% for item in items %}
     <tr>
       <td>{{ item.title }}</td>
-      <td>{{ item.year }}</td>
+      <td>{{ item.year if item.year and item.year != 0 else "" }}</td>
       <td>{{ item.manager }}</td>
       <td>{{ item.status }}</td>
       <td>{% if item.plex_key %}<code>plex:{{ item.plex_key }}</code>{% else %}<code>{{ item.external_id }}</code>{% endif %}</td>
