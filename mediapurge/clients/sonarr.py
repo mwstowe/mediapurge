@@ -128,12 +128,30 @@ def add_series(tvdb_id: int, title: str, root_folder: str):
     return r.json()["id"]
 
 
-def rescan_series(series_id: int):
-    """Trigger a disk scan for a series so Sonarr detects existing files."""
+def command_complete(command_id: int, timeout: int = 60) -> bool:
+    """Poll until a Sonarr command completes."""
+    import time
+    url, headers = _base()
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        r = requests.get(f"{url}/api/v3/command/{command_id}", headers=headers)
+        if r.status_code == 200:
+            status = r.json().get("status", "")
+            if status in ("completed", "failed"):
+                return status == "completed"
+        time.sleep(3)
+    return False
+
+
+def rescan_series(series_id: int) -> int | None:
+    """Trigger a disk scan for a series so Sonarr detects existing files. Returns command ID."""
     url, headers = _base()
     r = requests.post(f"{url}/api/v3/command", headers=headers,
                       json={"name": "RescanSeries", "seriesId": series_id})
     r.raise_for_status()
+    if r.status_code == 201:
+        return r.json().get("id")
+    return None
 
 
 def unmonitor_series(series_id: int):
@@ -147,22 +165,28 @@ def unmonitor_series(series_id: int):
     r.raise_for_status()
 
 
-def rename_series(series_id: int):
-    """Rename all files in a series to match Sonarr's naming convention."""
+def rename_series(series_id: int) -> int | None:
+    """Rename all files in a series to match Sonarr's naming convention. Returns command ID."""
     url, headers = _base()
     r = requests.post(f"{url}/api/v3/command", headers=headers,
                       json={"name": "RenameSeries", "seriesIds": [series_id]})
     r.raise_for_status()
+    if r.status_code == 201:
+        return r.json().get("id")
+    return None
 
 
-def manual_import(series_id: int, files: list[dict]):
-    """Manually import files into specific episodes.
+def manual_import(series_id: int, files: list[dict]) -> int | None:
+    """Manually import files into specific episodes. Returns command ID.
     files: [{"path": str, "seriesId": int, "seasonNumber": int, "episodeIds": [int], "quality": ..., "languages": ...}]
     """
     url, headers = _base()
     r = requests.post(f"{url}/api/v3/command", headers=headers,
                       json={"name": "ManualImport", "importMode": "auto", "files": files})
     r.raise_for_status()
+    if r.status_code == 201:
+        return r.json().get("id")
+    return None
 
 
 def get_wanted_series() -> list[dict]:

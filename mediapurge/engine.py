@@ -17,6 +17,23 @@ from mediapurge import notify
 
 log = logging.getLogger(__name__)
 
+
+def _wait_for(check_fn, timeout=60, interval=3, desc=""):
+    """Poll check_fn() until it returns truthy or timeout. Returns the result or False."""
+    import time
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            result = check_fn()
+            if result:
+                return result
+        except Exception:
+            pass
+        time.sleep(interval)
+    log.warning(f"Timeout waiting for: {desc}")
+    return False
+
+
 # Shared lock for maintenance operations (used by web UI and scheduler)
 maintenance_lock = threading.Lock()
 
@@ -800,8 +817,24 @@ def execute_deletions(report: EngineReport):
 
     # Wait for refresh to clear file info, then mark episodes as ignored
     if medusa_eps_to_ignore:
-        import time
-        time.sleep(8)
+        import requests as _req
+        from mediapurge.config import get_config as _gc
+        _mcfg = _gc()["medusa"]
+        _murl = _mcfg["url"].rstrip("/")
+        _mhdrs = {"X-Api-Key": _mcfg["api_key"]}
+
+        # Poll until Medusa has processed refresh for at least one of the shows
+        def _medusa_refresh_done():
+            for slug in medusa_shows_refreshed:
+                try:
+                    r = _req.get(f"{_murl}/api/v2/series/{slug}", headers=_mhdrs, verify=False)
+                    if r.status_code == 200:
+                        return True
+                except Exception:
+                    pass
+            return False
+
+        _wait_for(_medusa_refresh_done, timeout=30, desc='Medusa refresh for ignore')
         for slug, season, episode in medusa_eps_to_ignore:
             try:
                 medusa.ignore_episode(slug, season, episode)
@@ -1070,7 +1103,7 @@ def execute_moves(report: EngineReport):
 
         # Restore watch status after Plex re-discovers the files
         import time
-        time.sleep(10)  # Wait for Plex scan to begin processing
+        time.sleep(5)  # Wait for Plex scan to begin processing
 
         def _find_item(server, title, retries=3):
             """Find an item by title, with retries for scan delay."""
@@ -1104,8 +1137,7 @@ def execute_moves(report: EngineReport):
                         for m in matches:
                             if m.guid == saved_guid:
                                 found.fixMatch(searchResult=m)
-                                log.info(f"Fixed Plex match for {result.title}")
-                                time.sleep(3)  # Wait for metadata refresh
+                                _wait_for(lambda: server.fetchItem(found.ratingKey).guid == saved_guid, timeout=15, interval=3, desc='Plex fixMatch')
                                 found.reload()
                                 break
                     except Exception as e:
@@ -1209,7 +1241,7 @@ def _do_move(result: EvalResult, dest: str):
 
 def _move_sonarr_to_medusa(result: EvalResult, dest: str):
     """Move from Sonarr to Medusa. Safe order: verify, move files, add to Medusa, remove from Sonarr."""
-    import shutil, time, requests
+    import shutil, requests
     from mediapurge.config import get_config
 
     # Verify Medusa is reachable
@@ -1260,7 +1292,17 @@ def _move_sonarr_to_medusa(result: EvalResult, dest: str):
             medusa.refresh_show(new_slug)
             break
     if new_slug and unmonitored_eps:
-        time.sleep(3)
+        import requests as _req
+        from mediapurge.config import get_config as _gc
+        _mcfg = _gc()["medusa"]
+        _murl = _mcfg["url"].rstrip("/")
+        _mhdrs = {"X-Api-Key": _mcfg["api_key"]}
+
+        def _medusa_has_episodes():
+            r = _req.get(f"{_murl}/api/v2/series/{new_slug}/episodes?limit=1", headers=_mhdrs, verify=False)
+            return r.status_code == 200 and r.json()
+
+        _wait_for(_medusa_has_episodes, timeout=30, desc='Medusa refresh after move')
         for season, episode in unmonitored_eps:
             try:
                 medusa.ignore_episode(new_slug, season, episode)
@@ -1270,7 +1312,7 @@ def _move_sonarr_to_medusa(result: EvalResult, dest: str):
 
 def _move_medusa_to_sonarr(result: EvalResult, dest: str):
     """Move from Medusa to Sonarr. Safe order: verify, move files, add to Sonarr, remove from Medusa."""
-    import os, shutil, time, requests, warnings
+    import os, shutil, requests, warnings
     warnings.filterwarnings("ignore")
     from mediapurge.config import get_config
 
@@ -1332,13 +1374,15 @@ def _move_medusa_to_sonarr(result: EvalResult, dest: str):
     medusa.delete_show(show_slug, remove_files=False)
 
     # Step 4: Rescan, rename to Sonarr conventions, and transfer status
-    sonarr.rescan_series(new_series_id)
-    time.sleep(3)
+    cmd_id = sonarr.rescan_series(new_series_id)
+    if cmd_id:
+        sonarr.command_complete(cmd_id)
     # Manual import any files that Sonarr didn't auto-match using Medusa's mapping
     _fix_unmatched_episodes(new_series_id, file_map)
-    sonarr.rename_series(new_series_id)
+    cmd_id = sonarr.rename_series(new_series_id)
+    if cmd_id:
+        sonarr.command_complete(cmd_id)
     if ignored_eps:
-        time.sleep(3)
         sonarr_eps = sonarr.get_episodes(new_series_id)
         ep_ids_to_unmonitor = [
             e["id"] for e in sonarr_eps
@@ -1353,7 +1397,6 @@ def _fix_unmatched_episodes(series_id: int, file_map: dict):
     This bypasses Sonarr's filename parser entirely for reliability."""
     if not file_map:
         return
-    import time
     from mediapurge.config import get_config
     import requests
 
@@ -1393,15 +1436,16 @@ def _fix_unmatched_episodes(series_id: int, file_map: dict):
                 })
     if imports:
         try:
-            sonarr.manual_import(series_id, imports)
-            time.sleep(3)
+            cmd_id = sonarr.manual_import(series_id, imports)
+            if cmd_id:
+                sonarr.command_complete(cmd_id)
         except Exception:
             pass
 
 
 def _move_medusa_to_medusa(result: EvalResult, dest: str):
     """Move within Medusa. Safe order: move files, remove, wait, re-add."""
-    import shutil, time
+    import shutil
 
     show_slug = str(result.manager_id)
     shows = medusa.get_all_shows()
@@ -1422,7 +1466,12 @@ def _move_medusa_to_medusa(result: EvalResult, dest: str):
     # Step 2: Remove from Medusa, wait for it to process, then re-add
     try:
         medusa.delete_show(show_slug, remove_files=False)
-        time.sleep(5)  # Give Medusa time to fully process the removal
+
+        def _show_removed():
+            medusa._cache["shows"] = None
+            return not any(s.get('id', {}).get('slug') == show_slug for s in medusa.get_all_shows())
+
+        _wait_for(_show_removed, timeout=30, desc='Medusa delete show')
         is_anime = show_info.get("config", {}).get("anime", False) or "anime" in dest.lower()
         src_status = show_info.get("config", {}).get("defaultEpisodeStatus", "Wanted")
         src_list = (show_info.get("config", {}).get("showLists") or [None])[0]
@@ -1433,7 +1482,12 @@ def _move_medusa_to_medusa(result: EvalResult, dest: str):
             shutil.move(new_path, old_path)
         except Exception:
             pass
-        time.sleep(3)
+
+        def _show_removed_rollback():
+            medusa._cache["shows"] = None
+            return not any(s.get('id', {}).get('slug') == show_slug for s in medusa.get_all_shows())
+
+        _wait_for(_show_removed_rollback, timeout=15, desc='Medusa rollback wait')
         try:
             medusa.add_show(tvdb_id, old_path, anime=is_anime, show_list=src_list, default_status=src_status)
         except Exception:

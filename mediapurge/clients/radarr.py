@@ -66,3 +66,18 @@ def move_movie(movie_id: int, new_root_folder: str):
 def get_wanted_movies() -> list[dict]:
     """Get monitored movies without files."""
     return [m for m in get_all_movies() if not m.get('hasFile') and m.get('monitored')]
+
+
+def command_complete(command_id: int, timeout: int = 60) -> bool:
+    """Poll until a Radarr command completes."""
+    import time
+    url, headers = _base()
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        r = requests.get(f"{url}/api/v3/command/{command_id}", headers=headers)
+        if r.status_code == 200:
+            status = r.json().get("status", "")
+            if status in ("completed", "failed"):
+                return status == "completed"
+        time.sleep(3)
+    return False

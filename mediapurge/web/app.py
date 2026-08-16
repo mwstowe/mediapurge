@@ -717,7 +717,7 @@ def create_app() -> Flask:
         """Immediately move an item."""
         import time
         from mediapurge.clients import plex as plex_client
-        from mediapurge.engine import find_manager, _do_move, EvalResult
+        from mediapurge.engine import find_manager, _do_move, _wait_for, EvalResult
         dest = request.form.get("move_to", "")
         if not dest:
             return redirect(url_for("rules_list"))
@@ -743,23 +743,21 @@ def create_app() -> Flask:
                 db.delete(r)
             db.commit(); db.close()
             plex_client.scan_library(item.librarySectionTitle)
-            # Restore watch status
-            time.sleep(10)
-            for _ in range(3):
-                found = None
+
+            # Wait for Plex to discover the moved item
+            def _find_moved_item():
                 for section in server.library.sections():
                     try:
                         for i in section.search(item.title):
                             if i.title == item.title:
-                                found = i
-                                break
+                                return i
                     except Exception:
                         continue
-                    if found:
-                        break
-                if found:
-                    break
-                time.sleep(5)
+                return None
+
+            time.sleep(5)  # Brief initial wait for scan to begin
+            found = _wait_for(_find_moved_item, timeout=20, interval=5, desc='Plex find moved item')
+
             if found:
                 # Fix match if Plex re-matched incorrectly
                 if saved_guid and found.guid != saved_guid:
@@ -768,7 +766,7 @@ def create_app() -> Flask:
                         for m in matches:
                             if m.guid == saved_guid:
                                 found.fixMatch(searchResult=m)
-                                time.sleep(3)
+                                _wait_for(lambda: server.fetchItem(found.ratingKey).guid == saved_guid, timeout=15, interval=3, desc='Plex fixMatch')
                                 found.reload()
                                 break
                     except Exception:

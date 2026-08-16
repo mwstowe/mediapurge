@@ -99,9 +99,17 @@ def add_show(tvdb_id: int, location: str, anime: bool = False, show_list: str = 
     )
     r.raise_for_status()
 
-    # Step 2: Wait for Medusa to process the add
+    # Step 2: Wait for Medusa to process the add (poll until show appears)
     slug = f"tvdb{tvdb_id}"
-    time.sleep(5)
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        _cache["shows"] = None  # bust cache
+        try:
+            if any(s.get("id", {}).get("slug") == slug for s in get_all_shows()):
+                break
+        except Exception:
+            pass
+        time.sleep(3)
 
     # Step 3: Patch config — set defaultEpisodeStatus to Ignored first to prevent downloads
     config_patch = {"config": {
@@ -120,7 +128,16 @@ def add_show(tvdb_id: int, location: str, anime: bool = False, show_list: str = 
 
     # Step 4: Refresh to detect existing files (sets them to Downloaded)
     refresh_show(slug)
-    time.sleep(5)
+    # Poll until the show's episode data is populated (indicates refresh complete)
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        try:
+            ep_r = _get(f"{url}/api/v2/series/{slug}/episodes?limit=1", headers)
+            if ep_r.status_code == 200 and ep_r.json():
+                break
+        except Exception:
+            pass
+        time.sleep(3)
 
     # Step 5: Unpause and set the real defaultEpisodeStatus for future episodes
     requests.patch(f"{url}/api/v2/series/{slug}", headers=headers,
