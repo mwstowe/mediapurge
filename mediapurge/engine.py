@@ -1141,9 +1141,10 @@ def _do_move(result: EvalResult, dest: str):
     dest_path = dest_path.rstrip("/")
 
     # --- Pre-flight checks ---
-    # Validate dest_path is a real absolute path without traversal
+    # Validate dest_path is within known media roots
     dest_path = os.path.realpath(dest_path)
-    if not dest_path.startswith("/pub/video"):
+    allowed_root = os.path.realpath("/pub/video")
+    if not dest_path.startswith(allowed_root):
         raise ValueError(f"Destination path outside allowed root: {dest_path}")
     if not os.path.isdir(dest_path):
         raise FileNotFoundError(f"Destination directory does not exist: {dest_path}")
